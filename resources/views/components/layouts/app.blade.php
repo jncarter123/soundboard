@@ -72,7 +72,9 @@
                 @endcan
             </div>
             <div class="flex items-center gap-3">
-                <span class="text-sm text-gray-600">{{ auth()->user()->name }}</span>
+                <a href="{{ route('account') }}"
+                   class="text-sm {{ request()->routeIs('account') ? 'text-blue-600' : 'text-gray-600 hover:text-gray-900' }}"
+                   title="Your account">{{ auth()->user()->name }}</a>
                 <form method="POST" action="{{ route('logout') }}">
                     @csrf
                     <button type="submit" class="text-sm text-gray-600 hover:text-gray-900">Sign out</button>

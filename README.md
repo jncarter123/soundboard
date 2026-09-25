@@ -43,7 +43,7 @@ composer create-project jncarter123/soundboard soundboard   # installs, creates 
 cd soundboard
 
 npm install && npm run build   # build the dashboard's assets
-php artisan db:seed            # creates admin@example.com and prints its password
+php artisan soundboard:add-user --role=Admin   # your admin account; prompts for name, email, password
 
 php artisan serve              # the dashboard
 php artisan reverb:start       # the WebSocket server
@@ -52,7 +52,7 @@ php artisan pulse:check        # records connection metrics
 
 To work on Soundboard itself, clone the repository instead and run `composer setup`, which installs dependencies, creates `.env`, migrates, and builds the assets.
 
-Sign in at `http://localhost:8000` with the printed password and change it straight away.
+Sign in at `http://localhost:8000`. Everyone can change their own name, email, and password on the account page, reached by clicking your name in the header.
 
 ## Running with Docker
 
@@ -64,7 +64,7 @@ curl -fsSL -o docker.env https://raw.githubusercontent.com/jncarter123/soundboar
 echo "SOUNDBOARD_IMAGE=jncarter/soundboard:1" > .env   # pull instead of build
 
 docker compose up -d
-docker compose exec app php artisan db:seed --force   # creates admin@example.com and prints its password
+docker compose exec app php artisan soundboard:add-user --role=Admin   # your admin account
 ```
 
 The dashboard is on `127.0.0.1:8000` and Reverb on `127.0.0.1:8080`, both plain HTTP on loopback only, for a reverse proxy in front to terminate TLS. Set `APP_URL` in `docker.env` to the dashboard's public URL, scheme included (`https://soundboard.example.com`), or the browser blocks its assets as mixed content.
@@ -75,6 +75,17 @@ The dashboard is on `127.0.0.1:8000` and Reverb on `127.0.0.1:8080`, both plain 
 - **Reverb is tuned already:** the image includes the libuv event loop and compose raises its file limit to 65,536.
 
 Images are published to Docker Hub as [`jncarter/soundboard`](https://hub.docker.com/r/jncarter/soundboard) for `linux/amd64` and `linux/arm64`, tagged by version (`1.1.0`, `1.1`, `1`), `latest`, and commit SHA. To build from source instead, clone the repository and run `docker compose up -d --build`.
+
+## Locked out?
+
+Soundboard sends no email, so there's no "forgot password" link. Reset a password from the server instead. It also signs that user out everywhere:
+
+```bash
+php artisan soundboard:reset-password --email=you@example.com
+docker compose exec app php artisan soundboard:reset-password --email=you@example.com   # with Docker
+```
+
+Both user commands prompt for a password in a terminal, or generate one and print it when there's no terminal to ask in, such as `docker compose exec -T` or a script.
 
 ## Connecting an application
 

@@ -1,5 +1,6 @@
 <?php
 
+use App\Livewire\Account\Show as Account;
 use App\Livewire\Admin\Home;
 use App\Livewire\Admin\Metrics;
 use App\Livewire\Admin\Status;
@@ -24,6 +25,7 @@ Route::post('/logout', function () {
 })->name('logout')->middleware('auth');
 
 Route::middleware('auth')->prefix('admin')->group(function () {
+    Route::get('/account', Account::class)->name('account');
     Route::get('/', Home::class)->name('admin.home');
     Route::get('/users', UsersIndex::class)->name('admin.users')->middleware('can:users.read');
     Route::get('/roles', RolesIndex::class)->name('admin.roles')->middleware('can:roles.read');
