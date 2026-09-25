@@ -170,6 +170,84 @@ class SecurityHardeningTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_admin_can_delete_a_user_and_their_tokens(): void
+    {
+        $target = $this->userWithPermissions(['apps.read']);
+        $target->createToken('ci');
+
+        Livewire::actingAs($this->admin())
+            ->test(UsersIndex::class)
+            ->call('deleteUser', $target->id)
+            ->assertOk();
+
+        $this->assertNull(User::find($target->id));
+        $this->assertSame(0, DB::table('personal_access_tokens')->where('tokenable_id', $target->id)->count());
+        $this->assertSame(0, DB::table('model_has_roles')->where('model_id', $target->id)->count());
+    }
+
+    public function test_deleting_users_requires_permission(): void
+    {
+        $target = User::factory()->create();
+
+        Livewire::actingAs($this->userWithPermissions(['users.read', 'users.update']))
+            ->test(UsersIndex::class)
+            ->call('deleteUser', $target->id)
+            ->assertForbidden();
+
+        $this->assertNotNull(User::find($target->id));
+    }
+
+    public function test_user_cannot_delete_themselves(): void
+    {
+        $admin = $this->admin();
+
+        Livewire::actingAs($admin)
+            ->test(UsersIndex::class)
+            ->call('deleteUser', $admin->id)
+            ->assertForbidden();
+
+        $this->assertNotNull(User::find($admin->id));
+    }
+
+    public function test_user_cannot_delete_more_privileged_user(): void
+    {
+        Livewire::actingAs($this->userWithPermissions(['users.read', 'users.delete']))
+            ->test(UsersIndex::class)
+            ->call('deleteUser', $this->admin()->id)
+            ->assertForbidden();
+
+        $this->assertNotNull(User::find($this->admin()->id));
+    }
+
+    public function test_last_admin_cannot_be_deleted(): void
+    {
+        // Holds every permission through a non-Admin role, so only the
+        // last-admin rule stands in the way.
+        $superuser = $this->userWithPermissions(config('auth_permissions.permissions'));
+
+        Livewire::actingAs($superuser)
+            ->test(UsersIndex::class)
+            ->call('deleteUser', $this->admin()->id)
+            ->assertForbidden();
+
+        $this->assertNotNull(User::find($this->admin()->id));
+    }
+
+    public function test_delete_button_hidden_for_self_and_more_privileged_users(): void
+    {
+        $admin = $this->admin();
+        $peer = $this->userWithPermissions(['users.read']);
+
+        Livewire::actingAs($admin)
+            ->test(UsersIndex::class)
+            ->assertSeeHtml("deleteUser({$peer->id})")
+            ->assertDontSeeHtml("deleteUser({$admin->id})");
+
+        Livewire::actingAs($this->userWithPermissions(['users.read', 'users.delete']))
+            ->test(UsersIndex::class)
+            ->assertDontSeeHtml("deleteUser({$admin->id})");
+    }
+
     public function test_role_manager_cannot_grant_permissions_they_lack(): void
     {
         $manager = $this->userWithPermissions(['roles.read', 'roles.create']);

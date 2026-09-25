@@ -114,6 +114,30 @@ class Index extends Component
         $this->closeModal();
     }
 
+    public function deleteUser(int $userId): void
+    {
+        $this->authorize('users.delete');
+        $user = User::findOrFail($userId);
+
+        if ($user->is(auth()->user())) {
+            throw new AuthorizationException('You cannot delete your own account.');
+        }
+
+        $this->authorizeManageUser($user);
+
+        if ($user->hasRole(Role::ADMIN) && User::role(Role::ADMIN)->count() <= 1) {
+            throw new AuthorizationException('You cannot delete the last '.Role::ADMIN.'.');
+        }
+
+        // Sanctum doesn't remove tokens with their owner; roles are detached by Spatie.
+        $user->tokens()->delete();
+        $user->delete();
+
+        if ($this->editingUserId === $userId) {
+            $this->closeModal();
+        }
+    }
+
     /**
      * Editing a user's email or password effectively grants control of their
      * account, so only allow it for users with no more access than the actor.
@@ -121,7 +145,7 @@ class Index extends Component
     private function authorizeManageUser(User $user): void
     {
         if (! auth()->user()->holdsAllPermissions($user->getAllPermissions())) {
-            throw new AuthorizationException('You cannot edit a user with permissions you do not hold.');
+            throw new AuthorizationException('You cannot manage a user with permissions you do not hold.');
         }
     }
 

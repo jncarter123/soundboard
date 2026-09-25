@@ -52,14 +52,30 @@
                             </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
-                            @can('users.update')
-                            <button
-                                wire:click="editUser({{ $user->id }})"
-                                class="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
-                            >
-                                Edit
-                            </button>
-                            @endcan
+                            @php($canManage = auth()->user()->holdsAllPermissions($user->getAllPermissions()))
+                            <div class="flex items-center justify-end gap-2">
+                                @can('users.update')
+                                @if ($canManage)
+                                <button
+                                    wire:click="editUser({{ $user->id }})"
+                                    class="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                                >
+                                    Edit
+                                </button>
+                                @endif
+                                @endcan
+                                @can('users.delete')
+                                @if ($canManage && ! $user->is(auth()->user()))
+                                <button
+                                    wire:click="deleteUser({{ $user->id }})"
+                                    wire:confirm="Delete {{ $user->name }}? Their API tokens will stop working immediately."
+                                    class="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+                                >
+                                    Delete
+                                </button>
+                                @endif
+                                @endcan
+                            </div>
                         </td>
                     </tr>
                 @empty
