@@ -25,8 +25,10 @@ class ReverbMetricsDiagnose extends Command
         $failed = 0;
         $rows = [];
 
+        $counts = $api->getConnectionCounts($apps);
+
         foreach ($apps as $app) {
-            $count = $api->getConnectionCount($app);
+            $count = $counts[$app->app_id];
 
             if ($count === null) {
                 $failed++;
