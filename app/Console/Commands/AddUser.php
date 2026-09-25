@@ -72,8 +72,7 @@ class AddUser extends Command
         $this->components->info("Created {$email}".($roles ? ' with role '.implode(', ', $roles) : '').'.');
 
         if ($generated) {
-            $this->line("  Password: <comment>{$password}</comment>");
-            $this->line('  Sign in and change it on the account page.');
+            $this->printGeneratedPassword($password);
         }
 
         return self::SUCCESS;
