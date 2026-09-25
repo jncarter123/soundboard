@@ -54,6 +54,28 @@ To work on Soundboard itself, clone the repository instead and run `composer set
 
 Sign in at `http://localhost:8000` with the printed password and change it straight away.
 
+## Running with Docker
+
+One image runs as three containers from [`compose.yaml`](compose.yaml): the dashboard, the Reverb WebSocket server, and the Pulse metrics recorder.
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/jncarter123/soundboard/main/compose.yaml
+curl -fsSL -o docker.env https://raw.githubusercontent.com/jncarter123/soundboard/main/docker.env.example
+echo "SOUNDBOARD_IMAGE=jncarter/soundboard:1" > .env   # pull instead of build
+
+docker compose up -d
+docker compose exec app php artisan db:seed --force   # creates admin@example.com and prints its password
+```
+
+The dashboard is on `127.0.0.1:8000` and Reverb on `127.0.0.1:8080`, both plain HTTP on loopback only, for a reverse proxy in front to terminate TLS. Set `APP_URL` in `docker.env` to the dashboard's public URL, scheme included (`https://soundboard.example.com`), or the browser blocks its assets as mixed content.
+
+- **Back up the volume.** On first start, the dashboard container generates an `APP_KEY` onto the `soundboard-data` volume and says so in its log. It encrypts every stored app secret, so without it clients can't connect. Set `APP_KEY` in `docker.env` instead if you'd rather hold it yourself.
+- **Data** lives in SQLite on the same volume. Switch to MySQL or MariaDB in `docker.env`.
+- **Upgrades:** `docker compose pull && docker compose up -d`. Migrations run when the dashboard container starts.
+- **Reverb is tuned already:** the image includes the libuv event loop and compose raises its file limit to 65,536.
+
+Images are published to Docker Hub as [`jncarter/soundboard`](https://hub.docker.com/r/jncarter/soundboard) for `linux/amd64` and `linux/arm64`, tagged by version (`1.1.0`, `1.1`, `1`), `latest`, and commit SHA. To build from source instead, clone the repository and run `docker compose up -d --build`.
+
 ## Connecting an application
 
 Create an app in the dashboard, then point your Laravel app's broadcasting config at Soundboard's Reverb server using the credentials it shows:

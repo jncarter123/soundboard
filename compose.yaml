@@ -1,0 +1,91 @@
+name: soundboard
+
+# Three services, one image. All three are required: without `reverb` there is
+# nothing for your applications to connect to, and without `pulse` the
+# historical connection charts stay empty.
+
+x-app: &app
+  build:
+    context: .
+  # What `docker compose build` writes locally. On a server, point this at the
+  # published image instead — SOUNDBOARD_IMAGE=<namespace>/soundboard:<tag>
+  # in a .env beside this file — and pull rather than build.
+  image: ${SOUNDBOARD_IMAGE:-soundboard:latest}
+  env_file:
+    - docker.env
+  environment:
+    APP_NAME: Soundboard
+    APP_ENV: production
+    APP_DEBUG: "false"
+    LOG_CHANNEL: stderr
+    LOG_LEVEL: info
+    # The database defaults to SQLite on the shared volume
+    # (/var/lib/soundboard/database.sqlite). DB_CONNECTION and DB_DATABASE are
+    # deliberately not set here: values in this block override docker.env,
+    # which is where you switch to MySQL.
+    #
+    # All three containers write to SQLite (sessions, Pulse metrics), so WAL
+    # plus a busy timeout lets them take turns instead of failing with
+    # "database is locked". MySQL ignores these three.
+    DB_JOURNAL_MODE: wal
+    DB_BUSY_TIMEOUT: "5000"
+    DB_SYNCHRONOUS: normal
+    SESSION_DRIVER: database
+    CACHE_STORE: database
+    # sync, not database: nothing in Soundboard queues, and a queued job with
+    # no worker would never run.
+    QUEUE_CONNECTION: sync
+    # Believe X-Forwarded-* from anyone. Safe only because the ports below are
+    # published on 127.0.0.1, so the reverse proxy is the only client that can
+    # reach the dashboard. Narrow this if you publish the port more widely.
+    TRUSTED_PROXIES: "*"
+    # How the dashboard and the pulse recorder reach Reverb's HTTP API: over
+    # the compose network, by service name.
+    REVERB_METRICS_HOST: reverb
+    REVERB_METRICS_PORT: "8080"
+    REVERB_METRICS_SCHEME: http
+  volumes:
+    - soundboard-data:/var/lib/soundboard
+  restart: unless-stopped
+
+services:
+  app:
+    <<: *app
+    ports:
+      - "127.0.0.1:8000:8080"
+
+  reverb:
+    <<: *app
+    command: ["reverb"]
+    ports:
+      - "127.0.0.1:8080:8080"
+    # Every WebSocket connection holds a file descriptor. The container default
+    # is often 1,024, which caps Reverb well below what it can serve.
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    depends_on:
+      app:
+        # Waits out the migrations and the APP_KEY, both of which the web
+        # container owns.
+        condition: service_healthy
+
+  pulse:
+    <<: *app
+    command: ["pulse"]
+    # The image healthcheck curls /up; this role serves nothing. Ask whether
+    # the recorder loop is still alive instead. The brackets stop pgrep from
+    # matching the healthcheck's own shell command line.
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f '[p]ulse:check' >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  soundboard-data:
