@@ -30,16 +30,21 @@ class MetricsDrilldownTest extends TestCase
         $now = CarbonImmutable::now();
         $currentBucket = (int) (floor($now->getTimestamp() / 60) * 60);
 
+        // Pulse makes key_hash a generated column on MySQL, MariaDB, and
+        // PostgreSQL, which rejects explicit values; only SQLite needs it set.
+        $connection = DB::connection(config('pulse.storage.database.connection'));
+        $setsKeyHash = $connection->getDriverName() === 'sqlite';
+
         $rows = [];
         foreach (range(0, 30) as $i) {
             $bucket = $currentBucket - $i * 60;
-            $push = function (string $type, string $aggregate, float $value) use (&$rows, $bucket, $appId) {
+            $push = function (string $type, string $aggregate, float $value) use (&$rows, $bucket, $appId, $setsKeyHash) {
                 $rows[] = [
                     'bucket' => $bucket,
                     'period' => 60,
                     'type' => $type,
                     'key' => $appId,
-                    'key_hash' => md5($appId),
+                    ...($setsKeyHash ? ['key_hash' => md5($appId)] : []),
                     'aggregate' => $aggregate,
                     'value' => $value,
                     'count' => 1,
@@ -52,9 +57,7 @@ class MetricsDrilldownTest extends TestCase
             $push('reverb_connections', 'max', 15 + $i);
         }
 
-        DB::connection(config('pulse.storage.database.connection'))
-            ->table('pulse_aggregates')
-            ->insert($rows);
+        $connection->table('pulse_aggregates')->insert($rows);
     }
 
     public function test_selecting_an_app_populates_detail_time_series(): void
