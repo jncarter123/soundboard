@@ -6,6 +6,44 @@
         </button>
     </div>
 
+    {{-- Alerts --}}
+    <div class="mb-8">
+        <div class="flex items-baseline justify-between mb-4">
+            <h2 class="text-lg font-semibold text-gray-900">Alerts</h2>
+            <p class="text-xs text-gray-500">
+                @if ($alertDestinations)
+                    Notifying by {{ implode(' and ', $alertDestinations) }}
+                @else
+                    No destinations configured; set ALERTS_MAIL_TO or ALERTS_WEBHOOK_URL
+                @endif
+            </p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 divide-y divide-gray-200">
+            @forelse ($activeAlerts as $alert)
+                <div class="px-6 py-4 flex items-start gap-3">
+                    <span class="mt-0.5 inline-flex px-2 py-0.5 rounded-full text-xs font-medium {{ $alert->isCritical() ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800' }}">
+                        {{ ucfirst($alert->severity) }}
+                    </span>
+                    <div>
+                        <p class="text-sm font-medium text-gray-900">{{ $alert->message }}</p>
+                        <p class="text-xs text-gray-500">Since {{ $alert->triggered_at->format('M j, g:i A') }} UTC ({{ $alert->triggered_at->diffForHumans() }})</p>
+                    </div>
+                </div>
+            @empty
+                <p class="px-6 py-4 text-sm text-gray-600">No active alerts.</p>
+            @endforelse
+            @foreach ($recentAlerts as $alert)
+                <div class="px-6 py-3 flex items-start gap-3 bg-gray-50">
+                    <span class="mt-0.5 inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Resolved</span>
+                    <div>
+                        <p class="text-sm text-gray-700">{{ $alert->message }}</p>
+                        <p class="text-xs text-gray-500">{{ $alert->triggered_at->format('M j, g:i A') }} – {{ $alert->resolved_at->format('g:i A') }} UTC</p>
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    </div>
+
     {{-- Health Checks --}}
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
 

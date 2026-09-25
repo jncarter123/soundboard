@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin;
 
+use App\Models\Alert;
 use App\Models\ReverbApp;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
@@ -78,7 +79,14 @@ class Status extends Component
 
     public function render()
     {
-        return view('livewire.admin.status')
+        return view('livewire.admin.status', [
+            'activeAlerts' => Alert::active()->orderByRaw("severity = 'critical' desc")->latest('triggered_at')->get(),
+            'recentAlerts' => Alert::whereNotNull('resolved_at')->latest('resolved_at')->limit(5)->get(),
+            'alertDestinations' => array_filter([
+                config('alerts.mail_to') ? 'email' : null,
+                config('alerts.webhook_url') ? 'webhook' : null,
+            ]),
+        ])
             ->layout('components.layouts.app');
     }
 }

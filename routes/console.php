@@ -6,3 +6,6 @@ use Illuminate\Support\Facades\Schedule;
 // default). Runs from the `scheduler` container with Docker, or from the
 // `schedule:run` cron line otherwise; see the README.
 Schedule::command('activitylog:clean --force')->daily()->onOneServer();
+
+// Alert checks: connection limits, Reverb reachability, stale metrics.
+Schedule::command('soundboard:check-alerts')->everyMinute()->withoutOverlapping()->onOneServer();
