@@ -4,6 +4,7 @@ namespace App\Livewire\Users;
 
 use App\Models\Role;
 use App\Models\User;
+use App\Support\Audit;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\Hash;
@@ -80,6 +81,7 @@ class Index extends Component
         ]);
 
         $user->syncRoles($roles);
+        Audit::setChanged('user.roles_changed', 'Changed user roles', $user, [], $roles->pluck('name'));
         $this->closeModal();
     }
 
@@ -109,8 +111,15 @@ class Index extends Component
             $user->password = Hash::make($this->password);
         }
 
+        $passwordChanged = $user->isDirty('password');
         $user->save();
+        $previousRoles = $user->roles->pluck('name');
         $user->syncRoles($roles);
+        Audit::setChanged('user.roles_changed', 'Changed user roles', $user, $previousRoles, $roles->pluck('name'));
+
+        if ($passwordChanged) {
+            Audit::log('user.password_changed', "Changed another user's password", $user);
+        }
         $this->closeModal();
     }
 

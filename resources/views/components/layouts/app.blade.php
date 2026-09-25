@@ -64,6 +64,12 @@
                     Metrics
                 </a>
                 @endcan
+                @can('audit.read')
+                <a href="{{ route('admin.audit') }}"
+                   class="text-sm font-medium {{ request()->routeIs('admin.audit') ? 'text-blue-600 border-b-2 border-blue-600 pb-0.5' : 'text-gray-600 hover:text-gray-900' }}">
+                    Audit Log
+                </a>
+                @endcan
                 @can('status.read')
                 <a href="{{ route('admin.status') }}"
                    class="text-sm font-medium {{ request()->routeIs('admin.status') ? 'text-blue-600 border-b-2 border-blue-600 pb-0.5' : 'text-gray-600 hover:text-gray-900' }}">

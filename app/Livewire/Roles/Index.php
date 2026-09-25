@@ -3,6 +3,7 @@
 namespace App\Livewire\Roles;
 
 use App\Models\Role;
+use App\Support\Audit;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -74,6 +75,7 @@ class Index extends Component
         }
 
         $role->syncPermissions($this->selectedPermissions);
+        Audit::setChanged('role.permissions_changed', 'Changed role permissions', $role, $current, $this->selectedPermissions);
 
         $this->cancelForm();
     }

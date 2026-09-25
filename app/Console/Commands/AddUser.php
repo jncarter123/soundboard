@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Console\Concerns\ReadsNewPassword;
 use App\Models\Role;
 use App\Models\User;
+use App\Support\Audit;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
@@ -23,6 +24,11 @@ class AddUser extends Command
     protected $description = 'Create a user, e.g. the first admin on a new install';
 
     public function handle(): int
+    {
+        return Audit::fromCommandLine(fn () => $this->perform());
+    }
+
+    private function perform(): int
     {
         $name = $this->option('name') ?: $this->ask('Name');
         $email = $this->option('email') ?: $this->ask('Email');
@@ -61,6 +67,7 @@ class AddUser extends Command
         ]);
 
         $user->syncRoles(Role::whereIn('name', $roles)->get());
+        Audit::setChanged('user.roles_changed', 'Changed user roles', $user, [], $user->getRoleNames());
 
         $this->components->info("Created {$email}".($roles ? ' with role '.implode(', ', $roles) : '').'.');
 
