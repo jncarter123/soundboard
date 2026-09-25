@@ -10,7 +10,7 @@ Open an issue with steps to reproduce, what you expected, and what happened. For
 
 ```bash
 composer setup    # install dependencies, create .env, migrate, build assets
-php artisan db:seed   # creates admin@example.com and prints its password
+php artisan db:seed   # demo admin: creates admin@example.com and prints its password
 composer dev      # app server, queue, logs, and Vite
 php artisan reverb:start
 ```
