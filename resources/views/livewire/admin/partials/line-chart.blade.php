@@ -47,28 +47,41 @@
               stroke="#e5e7eb" stroke-width="1" />
         <text x="{{ $padL - 8 }}" y="{{ $gy + 4 }}" text-anchor="end"
               font-size="12" fill="#9ca3af" font-family="ui-sans-serif, system-ui">
-            {{ rtrim(rtrim(number_format($val, $val < 10 && $val != (int) $val ? 1 : 0), '0'), '.') }}
+            {{ number_format($val, $val < 10 && $val != (int) $val ? 1 : 0) }}
         </text>
     @endfor
 
     @if($hasData)
         @foreach($series as $s)
             @php
-                $pts = [];
+                // Buckets with no data (null) break the line instead of dropping
+                // it to zero, so each run of consecutive values is its own segment.
+                $segments = [];
+                $current = [];
                 foreach ($s['values'] as $i => $v) {
-                    $pts[] = round($xOf($i), 2).','.round($yOf((float) ($v ?? 0)), 2);
+                    if ($v === null) {
+                        if ($current) { $segments[] = $current; $current = []; }
+                        continue;
+                    }
+                    $current[] = [round($xOf($i), 2), round($yOf((float) $v), 2)];
                 }
-                $line = implode(' ', $pts);
-                $lastX = round($xOf($count - 1), 2);
+                if ($current) { $segments[] = $current; }
             @endphp
-            @if(($s['fill'] ?? false) && $count > 0)
-                <polygon points="{{ $padL }},{{ $baseY }} {{ $line }} {{ $lastX }},{{ $baseY }}"
-                         fill="{{ $s['color'] }}" fill-opacity="0.15" />
-            @endif
-            <polyline points="{{ $line }}" fill="none" stroke="{{ $s['color'] }}"
-                      stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+            @foreach($segments as $segment)
+                @php($line = implode(' ', array_map(fn ($p) => $p[0].','.$p[1], $segment)))
+                @if($s['fill'] ?? false)
+                    <polygon points="{{ $segment[0][0] }},{{ $baseY }} {{ $line }} {{ end($segment)[0] }},{{ $baseY }}"
+                             fill="{{ $s['color'] }}" fill-opacity="0.15" />
+                @endif
+                @if(count($segment) > 1)
+                    <polyline points="{{ $line }}" fill="none" stroke="{{ $s['color'] }}"
+                              stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+                @else
+                    <circle cx="{{ $segment[0][0] }}" cy="{{ $segment[0][1] }}" r="2" fill="{{ $s['color'] }}" />
+                @endif
+            @endforeach
             {{-- Invisible hover targets per point for native tooltips --}}
-            @foreach($s['values'] as $i => $v)
+            @foreach(array_filter($s['values'], fn ($v) => $v !== null) as $i => $v)
                 <circle cx="{{ round($xOf($i), 2) }}" cy="{{ round($yOf((float) ($v ?? 0)), 2) }}" r="6" fill="transparent">
                     <title>{{ $labels[$i] ?? '' }} · {{ $s['name'] }}: {{ number_format((float) ($v ?? 0), (($v ?? 0) == (int) ($v ?? 0)) ? 0 : 1) }}{{ isset($s['unit']) ? ' '.$s['unit'] : '' }}</title>
                 </circle>
