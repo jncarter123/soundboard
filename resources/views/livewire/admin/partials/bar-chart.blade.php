@@ -49,7 +49,7 @@
               stroke="#e5e7eb" stroke-width="1" />
         <text x="{{ $padL - 8 }}" y="{{ $gy + 4 }}" text-anchor="end"
               font-size="12" fill="#9ca3af" font-family="ui-sans-serif, system-ui">
-            {{ rtrim(rtrim(number_format($val, $val < 10 && $val != (int) $val ? 1 : 0), '0'), '.') }}
+            {{ number_format($val, $val < 10 && $val != (int) $val ? 1 : 0) }}
         </text>
     @endfor
 
