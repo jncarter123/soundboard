@@ -97,6 +97,20 @@ return [
 
     'cipher' => 'AES-256-CBC',
 
+    /*
+    |--------------------------------------------------------------------------
+    | Trusted Proxies
+    |--------------------------------------------------------------------------
+    |
+    | Addresses whose X-Forwarded-* headers are believed: "*" for any, or a
+    | comma-separated list of IPs/CIDRs. Unset trusts none. Only trust "*"
+    | when the app is reachable solely through the proxy, or clients can
+    | spoof their IP past the login and API rate limits.
+    |
+    */
+
+    'trusted_proxies' => env('TRUSTED_PROXIES'),
+
     'key' => env('APP_KEY'),
 
     'previous_keys' => [
