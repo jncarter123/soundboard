@@ -64,8 +64,7 @@ class ResetPassword extends Command
         $this->components->info("Reset the password for {$email} and signed them out everywhere.");
 
         if ($generated) {
-            $this->line("  Password: <comment>{$password}</comment>");
-            $this->line('  Sign in and change it on the account page.');
+            $this->printGeneratedPassword($password);
         }
 
         return self::SUCCESS;

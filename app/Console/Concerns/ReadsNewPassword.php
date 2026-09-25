@@ -3,6 +3,7 @@
 namespace App\Console\Concerns;
 
 use Illuminate\Support\Str;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 
 /**
  * Reads a new password for the user commands: asked for without echoing in a
@@ -22,7 +23,9 @@ trait ReadsNewPassword
             : null;
 
         if (blank($password)) {
-            return [Str::password(20), true];
+            // Letters and digits only: symbols like \ $ ' < need quoting when
+            // pasted into a shell. 24 characters is still over 140 bits.
+            return [Str::password(24, symbols: false), true];
         }
 
         if ($this->secret('Confirm password') !== $password) {
@@ -32,6 +35,16 @@ trait ReadsNewPassword
         }
 
         return [$password, false];
+    }
+
+    /**
+     * Print a generated password exactly. Unescaped, console markup could
+     * mangle it: a trailing backslash, for one, would swallow the closing tag.
+     */
+    protected function printGeneratedPassword(string $password): void
+    {
+        $this->line('  Password: <comment>'.OutputFormatter::escape($password).'</comment>');
+        $this->line('  Sign in and change it on the account page.');
     }
 
     /**

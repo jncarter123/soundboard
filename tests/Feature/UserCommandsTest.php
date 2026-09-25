@@ -2,9 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Console\Concerns\ReadsNewPassword;
 use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\AdminUserSeeder;
+use Illuminate\Console\Command;
+use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -52,6 +55,40 @@ class UserCommandsTest extends TestCase
         $user = User::where('email', 'first@example.com')->firstOrFail();
         $this->assertTrue($user->hasRole(Role::ADMIN));
         $this->assertTrue($user->holdsAllPermissions(config('auth_permissions.permissions')));
+    }
+
+    public function test_printed_passwords_are_exact_even_with_console_markup_characters(): void
+    {
+        // A trailing backslash used to swallow the closing </comment> tag.
+        $command = new class extends Command
+        {
+            use ReadsNewPassword;
+
+            protected $signature = 'test:print {password}';
+
+            public function handle(): void
+            {
+                $this->printGeneratedPassword($this->argument('password'));
+            }
+        };
+        $this->app->make(Kernel::class)->registerCommand($command);
+
+        foreach (['ends-with-backslash\\', '<info>tagged</info>', 'a\\<b>c'] as $password) {
+            Artisan::call('test:print', ['password' => $password]);
+            $this->assertStringContainsString("Password: {$password}\n", Artisan::output());
+        }
+    }
+
+    public function test_generated_passwords_are_letters_and_digits(): void
+    {
+        foreach (range(1, 50) as $i) {
+            Artisan::call('soundboard:add-user', [
+                '--name' => 'U', '--email' => "u{$i}@example.com", '--no-interaction' => true,
+            ]);
+            preg_match('/Password: (\S+)/', Artisan::output(), $m);
+            $this->assertMatchesRegularExpression('/^[A-Za-z0-9]{24}$/', $m[1]);
+            $this->assertTrue(Hash::check($m[1], User::where('email', "u{$i}@example.com")->value('password')));
+        }
     }
 
     public function test_add_user_rejects_bad_input(): void
