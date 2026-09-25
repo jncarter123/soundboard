@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Console\Concerns\ReadsNewPassword;
 use App\Models\User;
+use App\Support\Audit;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
@@ -23,6 +24,11 @@ class ResetPassword extends Command
     protected $description = 'Set a new password for a user and sign them out everywhere';
 
     public function handle(): int
+    {
+        return Audit::fromCommandLine(fn () => $this->perform());
+    }
+
+    private function perform(): int
     {
         $email = $this->option('email') ?: $this->ask('Email');
         $user = User::where('email', $email)->first();
@@ -53,6 +59,7 @@ class ResetPassword extends Command
 
         $user->update(['password' => Hash::make($password)]);
         $user->signOutOtherSessions();
+        Audit::log('user.password_reset', 'Reset password from the command line', $user);
 
         $this->components->info("Reset the password for {$email} and signed them out everywhere.");
 

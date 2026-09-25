@@ -16,6 +16,7 @@ Reverb normally reads its applications from `config/reverb.php`, so adding an ap
 - **System status**: database, Redis, and Reverb health at a glance, plus a `/api/health` endpoint for load balancers.
 - **Role-based access control**: fine-grained permissions for apps, users, roles, tokens, metrics, and status. Users can never grant access they don't hold themselves.
 - **API**: manage apps and rotate credentials from scripts and CI with personal access tokens.
+- **Audit log**: who signed in, viewed or regenerated credentials, and changed apps, users, roles, or tokens, with the source and IP of each action.
 - **Secure by default**: app secrets are encrypted at rest, credentials are only visible to users who can edit the app, and login is rate limited.
 
 ## Screenshots
@@ -30,7 +31,7 @@ Reverb normally reads its applications from `config/reverb.php`, so adding an ap
 
 ## Requirements
 
-- PHP 8.3+
+- PHP 8.4+
 - Composer
 - Node.js and npm
 - SQLite, MySQL 8+, or MariaDB
@@ -50,13 +51,19 @@ php artisan reverb:start       # the WebSocket server
 php artisan pulse:check        # records connection metrics
 ```
 
+In production, also add Laravel's scheduler to cron. It removes audit log entries older than `ACTIVITYLOG_CLEAN_AFTER_DAYS` (365 by default):
+
+```cron
+* * * * * cd /path/to/soundboard && php artisan schedule:run >> /dev/null 2>&1
+```
+
 To work on Soundboard itself, clone the repository instead and run `composer setup`, which installs dependencies, creates `.env`, migrates, and builds the assets.
 
 Sign in at `http://localhost:8000`. Everyone can change their own name, email, and password on the account page, reached by clicking your name in the header.
 
 ## Running with Docker
 
-One image runs as three containers from [`compose.yaml`](compose.yaml): the dashboard, the Reverb WebSocket server, and the Pulse metrics recorder.
+One image runs as four containers from [`compose.yaml`](compose.yaml): the dashboard, the Reverb WebSocket server, the Pulse metrics recorder, and a scheduler that trims the audit log.
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/jncarter123/soundboard/main/compose.yaml
@@ -75,6 +82,17 @@ The dashboard is on `127.0.0.1:8000` and Reverb on `127.0.0.1:8080`, both plain 
 - **Reverb is tuned already:** the image includes the libuv event loop and compose raises its file limit to 65,536.
 
 Images are published to Docker Hub as [`jncarter/soundboard`](https://hub.docker.com/r/jncarter/soundboard) for `linux/amd64` and `linux/arm64`, tagged by version (`1.1.0`, `1.1`, `1`), `latest`, and commit SHA. To build from source instead, clone the repository and run `docker compose up -d --build`.
+
+## Audit log
+
+The **Audit Log** page (the `audit.read` permission, which Admin has) records who did what, when, and from where:
+
+- Sign-ins, failed sign-ins, and sign-outs
+- Viewing and regenerating app credentials, from the dashboard or the API
+- Changes to apps, users, roles, role permissions, and user roles, with old and new values
+- Password changes and resets, and API tokens created or revoked
+
+App keys, secrets, and passwords are never recorded. Entries can't be edited or deleted from the dashboard; entries older than `ACTIVITYLOG_CLEAN_AFTER_DAYS` (365 by default) are removed daily by the scheduler.
 
 ## Locked out?
 

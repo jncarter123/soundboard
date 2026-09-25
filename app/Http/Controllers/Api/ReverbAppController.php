@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\ReverbAppRequest;
 use App\Http\Resources\ReverbAppResource;
 use App\Models\ReverbApp;
+use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
@@ -52,6 +53,8 @@ class ReverbAppController extends Controller
 
     public function credentials(ReverbApp $app): JsonResponse
     {
+        Audit::log('credentials.viewed', 'Viewed app credentials', $app);
+
         return response()->json(['data' => $this->credentialsFor($app)]);
     }
 
@@ -61,6 +64,7 @@ class ReverbAppController extends Controller
             'key' => ReverbApp::generateKey(),
             'secret' => ReverbApp::generateSecret(),
         ]);
+        Audit::log('credentials.regenerated', 'Regenerated app credentials', $app);
 
         return response()->json(['data' => $this->credentialsFor($app)]);
     }

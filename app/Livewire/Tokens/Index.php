@@ -3,6 +3,7 @@
 namespace App\Livewire\Tokens;
 
 use App\Models\User;
+use App\Support\Audit;
 use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -89,6 +90,10 @@ class Index extends Component
         $user = User::findOrFail($this->selectedUserId);
         $expiry = $this->expiresAt ? Carbon::parse($this->expiresAt)->endOfDay() : null;
         $token = $user->createToken($this->tokenName, ['*'], $expiry);
+        Audit::log('token.created', 'Created API token', $user, [
+            'token' => $this->tokenName,
+            'expires_at' => $expiry?->toDateTimeString(),
+        ]);
 
         $this->newTokenValue = $token->plainTextToken;
         $this->showNewToken = true;
@@ -99,6 +104,10 @@ class Index extends Component
         $token = PersonalAccessToken::findOrFail($tokenId);
         $this->authorizeUserSelection($token->tokenable_id);
         $token->delete();
+
+        if ($owner = User::find($token->tokenable_id)) {
+            Audit::log('token.revoked', 'Revoked API token', $owner, ['token' => $token->name]);
+        }
     }
 
     private function authorizeUserSelection(?int $userId): void

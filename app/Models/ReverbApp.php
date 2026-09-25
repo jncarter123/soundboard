@@ -4,9 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Laravel\Reverb\Application;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 
 class ReverbApp extends Model
 {
+    use LogsActivity;
+
     /** Who may send client events ("whispers"): Reverb's accepted values, plus "none" to disable them. */
     public const CLIENT_EVENTS_FROM = ['members', 'all', 'none'];
 
@@ -50,6 +54,21 @@ class ReverbApp extends Model
             'rate_limit_decay_seconds' => 'integer',
             'rate_limit_terminate' => 'boolean',
         ];
+    }
+
+    /**
+     * Settings changes are audited; the key and secret never are. Regenerating
+     * credentials changes only those, so it produces no entry here and is
+     * logged separately as `credentials.regenerated`, without the values.
+     */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logExcept(['key', 'secret'])
+            ->logFillable()
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges()
+            ->setDescriptionForEvent(fn (string $event) => ucfirst($event).' app');
     }
 
     public function toReverbApplication(): Application

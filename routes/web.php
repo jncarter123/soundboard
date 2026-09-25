@@ -5,6 +5,7 @@ use App\Livewire\Admin\Home;
 use App\Livewire\Admin\Metrics;
 use App\Livewire\Admin\Status;
 use App\Livewire\Apps\Index as AppsIndex;
+use App\Livewire\Audit\Index as AuditIndex;
 use App\Livewire\Auth\Login;
 use App\Livewire\Roles\Index as RolesIndex;
 use App\Livewire\Tokens\Index as TokensIndex;
@@ -32,5 +33,6 @@ Route::middleware('auth')->prefix('admin')->group(function () {
     Route::get('/tokens', TokensIndex::class)->name('admin.tokens');
     Route::get('/apps', AppsIndex::class)->name('admin.apps')->middleware('can:apps.read');
     Route::get('/metrics', Metrics::class)->name('admin.metrics')->middleware('can:metrics.read');
+    Route::get('/audit', AuditIndex::class)->name('admin.audit')->middleware('can:audit.read');
     Route::get('/status', Status::class)->name('admin.status')->middleware('can:status.read');
 });

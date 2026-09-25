@@ -18,5 +18,6 @@ return [
         'apps.delete',
         'metrics.read',
         'status.read',
+        'audit.read',
     ],
 ];

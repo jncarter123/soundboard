@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Account;
 
+use App\Support\Audit;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -69,6 +70,7 @@ class Show extends Component
         $user = auth()->user();
         $user->update(['password' => Hash::make($this->password)]);
         $user->signOutOtherSessions(session()->getId());
+        Audit::log('account.password_changed', 'Changed own password', $user);
 
         $this->reset('currentPassword', 'password', 'password_confirmation', 'profileStatus');
         $this->passwordStatus = 'Password changed. You have been signed out everywhere else.';

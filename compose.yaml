@@ -1,8 +1,9 @@
 name: soundboard
 
-# Three services, one image. All three are required: without `reverb` there is
-# nothing for your applications to connect to, and without `pulse` the
-# historical connection charts stay empty.
+# Four services, one image. All are required: without `reverb` there is nothing
+# for your applications to connect to, without `pulse` the historical
+# connection charts stay empty, and without `scheduler` the audit log is never
+# trimmed.
 
 x-app: &app
   build:
@@ -69,6 +70,20 @@ services:
       app:
         # Waits out the migrations and the APP_KEY, both of which the web
         # container owns.
+        condition: service_healthy
+
+  scheduler:
+    <<: *app
+    command: ["scheduler"]
+    healthcheck:
+      # Brackets keep pgrep from matching this healthcheck's own command line.
+      test: ["CMD-SHELL", "pgrep -f '[s]chedule:work' >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    depends_on:
+      app:
         condition: service_healthy
 
   pulse:

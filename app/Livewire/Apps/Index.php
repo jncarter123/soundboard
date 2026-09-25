@@ -3,6 +3,7 @@
 namespace App\Livewire\Apps;
 
 use App\Models\ReverbApp;
+use App\Support\Audit;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -121,6 +122,7 @@ class Index extends Component
             'key' => ReverbApp::generateKey(),
             'secret' => ReverbApp::generateSecret(),
         ]);
+        Audit::log('credentials.regenerated', 'Regenerated app credentials', $app);
 
         $this->revealAppId = $app->id;
     }
@@ -128,7 +130,9 @@ class Index extends Component
     public function revealCredentials(int $id): void
     {
         $this->authorize('apps.update');
-        $this->revealAppId = ReverbApp::findOrFail($id)->id;
+        $app = ReverbApp::findOrFail($id);
+        Audit::log('credentials.viewed', 'Viewed app credentials', $app);
+        $this->revealAppId = $app->id;
     }
 
     public function closeReveal(): void

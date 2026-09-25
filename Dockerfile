@@ -2,9 +2,10 @@
 
 # One image, three roles, chosen by the container's command:
 #
-#   web     the dashboard and API (FrankenPHP), and the migrations
-#   reverb  the WebSocket server your applications connect to
-#   pulse   `pulse:check`, which records connection metrics every 15 seconds
+#   web        the dashboard and API (FrankenPHP), and the migrations
+#   reverb     the WebSocket server your applications connect to
+#   pulse      `pulse:check`, which records connection metrics every 15 seconds
+#   scheduler  `schedule:work`, which removes old audit log entries daily
 #
 # They share one filesystem, so the dashboard and the server it manages can
 # never disagree about what the code says.

@@ -6,13 +6,14 @@
     "keywords": ["laravel", "reverb", "websockets", "pusher", "dashboard", "multi-tenant"],
     "license": "MIT",
     "require": {
-        "php": "^8.3",
+        "php": "^8.4",
         "laravel/framework": "^13.24.0",
         "laravel/pulse": "^1.8.0",
         "laravel/reverb": "^1.11.0",
         "laravel/sanctum": "^4.3.3",
         "laravel/tinker": "^3.0.2",
         "livewire/livewire": "^4.3.5",
+        "spatie/laravel-activitylog": "^5.0",
         "spatie/laravel-permission": "^8.3.0"
     },
     "require-dev": {
@@ -86,7 +87,7 @@
             "php-http/discovery": true
         },
         "platform": {
-            "php": "8.3.0"
+            "php": "8.4.0"
         }
     },
     "minimum-stability": "stable",

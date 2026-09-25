@@ -2,9 +2,10 @@
 #
 # Three roles out of one image:
 #
-#   web     FrankenPHP over public/, plus the migrations.
-#   reverb  `reverb:start`, the WebSocket server your applications connect to.
-#   pulse   `pulse:check`, which records each app's connection count.
+#   web        FrankenPHP over public/, plus the migrations.
+#   reverb     `reverb:start`, the WebSocket server your applications connect to.
+#   pulse      `pulse:check`, which records each app's connection count.
+#   scheduler  `schedule:work`: daily cleanup of old audit log entries.
 #
 # The web container owns the migrations and the key so the three never race;
 # the others wait for it (compose holds them back until /up answers).
@@ -77,6 +78,13 @@ case "${role}" in
         ;;
     pulse)
         exec php artisan pulse:check
+        ;;
+    scheduler)
+        # A schedule mutex stranded by a kill would hold a task off until it
+        # expires. Nothing of ours is running yet, so clearing is always safe.
+        php artisan schedule:clear-cache \
+            || echo "soundboard: schedule:clear-cache failed; a stale mutex may delay the next run" >&2
+        exec php artisan schedule:work
         ;;
     *)
         exec "$@"
