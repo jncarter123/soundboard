@@ -36,21 +36,23 @@ class ReverbConnections
             return;
         }
 
-        ReverbApp::all()->each(function (ReverbApp $app) use ($event) {
-            $connections = $this->api->getConnectionCount($app);
+        // Polled concurrently so an unreachable Reverb server costs one timeout,
+        // not one per app, inside the pulse:check loop.
+        $counts = $this->api->getConnectionCounts(ReverbApp::all());
 
-            // getConnectionCount() logs and returns null on failure — skip the bucket
-            // rather than recording a misleading zero.
+        foreach ($counts as $appId => $connections) {
+            // A failed poll is logged and returns null — skip the bucket rather
+            // than recording a misleading zero.
             if ($connections === null) {
-                return;
+                continue;
             }
 
             $this->pulse->record(
                 type: 'reverb_connections',
-                key: $app->app_id,
+                key: $appId,
                 value: $connections,
                 timestamp: $event->time->getTimestamp(),
             )->avg()->max()->onlyBuckets();
-        });
+        }
     }
 }

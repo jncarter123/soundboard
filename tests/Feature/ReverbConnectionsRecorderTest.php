@@ -37,7 +37,7 @@ class ReverbConnectionsRecorderTest extends TestCase
         $this->makeApp('app-a');
 
         $api = Mockery::mock(ReverbApiService::class);
-        $api->shouldReceive('getConnectionCount')->once()->andReturn(42);
+        $api->shouldReceive('getConnectionCounts')->once()->andReturn(['app-a' => 42]);
 
         // The recorder chains ->avg()->max()->onlyBuckets() on the returned Entry.
         $entry = Mockery::mock(Entry::class);
@@ -59,7 +59,7 @@ class ReverbConnectionsRecorderTest extends TestCase
         $this->makeApp('app-b');
 
         $api = Mockery::mock(ReverbApiService::class);
-        $api->shouldReceive('getConnectionCount')->once()->andReturnNull();
+        $api->shouldReceive('getConnectionCounts')->once()->andReturn(['app-b' => null]);
 
         $pulse = Mockery::mock(Pulse::class);
         $pulse->shouldNotReceive('record'); // null poll must not record a bucket
@@ -72,7 +72,7 @@ class ReverbConnectionsRecorderTest extends TestCase
         $this->makeApp('app-c');
 
         $api = Mockery::mock(ReverbApiService::class);
-        $api->shouldNotReceive('getConnectionCount'); // second % 15 != 0 → no poll at all
+        $api->shouldNotReceive('getConnectionCounts'); // second % 15 != 0 → no poll at all
 
         $pulse = Mockery::mock(Pulse::class);
         $pulse->shouldNotReceive('record');

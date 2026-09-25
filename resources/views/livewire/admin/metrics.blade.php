@@ -151,7 +151,7 @@
                                                 @endif
                                             </td>
                                             <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-600 text-right font-mono">
-                                                {{ $channelInfo->subscription_count ?? '—' }}
+                                                {{ $channelInfo['subscription_count'] ?? '—' }}
                                             </td>
                                         </tr>
                                     @endforeach
