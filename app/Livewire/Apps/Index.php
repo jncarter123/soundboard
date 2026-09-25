@@ -3,6 +3,7 @@
 namespace App\Livewire\Apps;
 
 use App\Models\ReverbApp;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -28,6 +29,16 @@ class Index extends Component
     public int $maxMessageSize = 10000;
 
     public ?int $maxConnections = null;
+
+    public string $acceptClientEventsFrom = 'members';
+
+    public bool $rateLimitEnabled = false;
+
+    public int $rateLimitMaxAttempts = 60;
+
+    public int $rateLimitDecaySeconds = 60;
+
+    public bool $rateLimitTerminate = false;
 
     /**
      * The app whose credentials are shown. Only the id lives in component
@@ -64,6 +75,11 @@ class Index extends Component
         $this->activityTimeout = $app->activity_timeout;
         $this->maxMessageSize = $app->max_message_size;
         $this->maxConnections = $app->max_connections;
+        $this->acceptClientEventsFrom = $app->accept_client_events_from;
+        $this->rateLimitEnabled = $app->rate_limit_enabled;
+        $this->rateLimitMaxAttempts = $app->rate_limit_max_attempts;
+        $this->rateLimitDecaySeconds = $app->rate_limit_decay_seconds;
+        $this->rateLimitTerminate = $app->rate_limit_terminate;
     }
 
     public function saveCreate(): void
@@ -72,15 +88,10 @@ class Index extends Component
         $this->validate($this->createRules());
 
         $app = ReverbApp::create([
-            'name' => $this->name,
             'app_id' => $this->appId,
             'key' => ReverbApp::generateKey(),
             'secret' => ReverbApp::generateSecret(),
-            'allowed_origins' => $this->parseOrigins(),
-            'ping_interval' => $this->pingInterval,
-            'activity_timeout' => $this->activityTimeout,
-            'max_message_size' => $this->maxMessageSize,
-            'max_connections' => $this->maxConnections,
+            ...$this->settingsAttributes(),
         ]);
 
         $this->creating = false;
@@ -96,14 +107,7 @@ class Index extends Component
         // app_id is immutable: clients connect with it and Pulse metrics are
         // keyed by it, so changing it would break both.
         $app = ReverbApp::findOrFail($this->editingAppId);
-        $app->update([
-            'name' => $this->name,
-            'allowed_origins' => $this->parseOrigins(),
-            'ping_interval' => $this->pingInterval,
-            'activity_timeout' => $this->activityTimeout,
-            'max_message_size' => $this->maxMessageSize,
-            'max_connections' => $this->maxConnections,
-        ]);
+        $app->update($this->settingsAttributes());
 
         $this->closeModal();
     }
@@ -166,10 +170,41 @@ class Index extends Component
 
     private function resetForm(): void
     {
-        $this->reset(['name', 'appId', 'allowedOrigins', 'maxConnections']);
-        $this->pingInterval = 60;
-        $this->activityTimeout = 30;
-        $this->maxMessageSize = 10000;
+        $this->reset([
+            'name', 'appId', 'allowedOrigins', 'pingInterval', 'activityTimeout', 'maxMessageSize', 'maxConnections',
+            'acceptClientEventsFrom', 'rateLimitEnabled', 'rateLimitMaxAttempts', 'rateLimitDecaySeconds', 'rateLimitTerminate',
+        ]);
+    }
+
+    /**
+     * The form's settings as model attributes, shared by create and edit.
+     */
+    private function settingsAttributes(): array
+    {
+        return [
+            'name' => $this->name,
+            'allowed_origins' => $this->parseOrigins(),
+            'ping_interval' => $this->pingInterval,
+            'activity_timeout' => $this->activityTimeout,
+            'max_message_size' => $this->maxMessageSize,
+            'max_connections' => $this->maxConnections,
+            'accept_client_events_from' => $this->acceptClientEventsFrom,
+            'rate_limit_enabled' => $this->rateLimitEnabled,
+            'rate_limit_max_attempts' => $this->rateLimitMaxAttempts,
+            'rate_limit_decay_seconds' => $this->rateLimitDecaySeconds,
+            'rate_limit_terminate' => $this->rateLimitTerminate,
+        ];
+    }
+
+    private function settingsRules(): array
+    {
+        return [
+            'acceptClientEventsFrom' => ['required', Rule::in(ReverbApp::CLIENT_EVENTS_FROM)],
+            'rateLimitEnabled' => ['boolean'],
+            'rateLimitMaxAttempts' => ['required', 'integer', 'min:1'],
+            'rateLimitDecaySeconds' => ['required', 'integer', 'min:1'],
+            'rateLimitTerminate' => ['boolean'],
+        ];
     }
 
     private function parseOrigins(): array
@@ -200,6 +235,7 @@ class Index extends Component
             'activityTimeout' => ['required', 'integer', 'min:1'],
             'maxMessageSize' => ['required', 'integer', 'min:1'],
             'maxConnections' => ['nullable', 'integer', 'min:1'],
+            ...$this->settingsRules(),
         ];
     }
 
@@ -212,6 +248,7 @@ class Index extends Component
             'activityTimeout' => ['required', 'integer', 'min:1'],
             'maxMessageSize' => ['required', 'integer', 'min:1'],
             'maxConnections' => ['nullable', 'integer', 'min:1'],
+            ...$this->settingsRules(),
         ];
     }
 }

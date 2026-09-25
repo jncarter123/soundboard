@@ -113,6 +113,12 @@ curl -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" https://sou
 
 Requests are limited to 60 per minute per user.
 
+Besides `name` and `allowed_origins`, create and update accept Reverb's per-app options: `ping_interval`, `activity_timeout`, `max_message_size`, `max_connections`, `accept_client_events_from` (`members`, `all`, or `none`), and `rate_limiting`, which takes the same shape as Reverb's own config:
+
+```json
+{ "rate_limiting": { "enabled": true, "max_attempts": 60, "decay_seconds": 60, "terminate_on_limit": false } }
+```
+
 ## Configuration
 
 | Variable | Default | Description |

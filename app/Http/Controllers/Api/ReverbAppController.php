@@ -20,7 +20,7 @@ class ReverbAppController extends Controller
     public function store(ReverbAppRequest $request): JsonResponse
     {
         $app = ReverbApp::create([
-            ...$request->validated(),
+            ...$request->appAttributes(),
             'key' => ReverbApp::generateKey(),
             'secret' => ReverbApp::generateSecret(),
         ]);
@@ -38,7 +38,7 @@ class ReverbAppController extends Controller
 
     public function update(ReverbAppRequest $request, ReverbApp $app): ReverbAppResource
     {
-        $app->update($request->validated());
+        $app->update($request->appAttributes());
 
         return ReverbAppResource::make($app);
     }
