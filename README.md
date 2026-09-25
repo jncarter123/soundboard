@@ -39,16 +39,18 @@ Reverb normally reads its applications from `config/reverb.php`, so adding an ap
 ## Getting started
 
 ```bash
-git clone https://github.com/jncarter123/soundboard.git
+composer create-project jncarter123/soundboard soundboard   # installs, creates .env, and migrates
 cd soundboard
 
-composer setup           # install dependencies, create .env, migrate, build assets
-php artisan db:seed      # creates admin@example.com and prints its password
+npm install && npm run build   # build the dashboard's assets
+php artisan db:seed            # creates admin@example.com and prints its password
 
-php artisan serve        # the dashboard
-php artisan reverb:start # the WebSocket server
-php artisan pulse:check  # records connection metrics
+php artisan serve              # the dashboard
+php artisan reverb:start       # the WebSocket server
+php artisan pulse:check        # records connection metrics
 ```
+
+To work on Soundboard itself, clone the repository instead and run `composer setup`, which installs dependencies, creates `.env`, migrates, and builds the assets.
 
 Sign in at `http://localhost:8000` with the printed password and change it straight away.
 
