@@ -233,6 +233,46 @@
                                     @error('maxConnections') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
                                 </div>
                             </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Client Events</label>
+                                <select
+                                    wire:model="acceptClientEventsFrom"
+                                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none @error('acceptClientEventsFrom') border-red-400 @enderror"
+                                >
+                                    <option value="members">Channel members only</option>
+                                    <option value="all">Any connection</option>
+                                    <option value="none">Disabled</option>
+                                </select>
+                                <p class="mt-1 text-xs text-gray-500">Who can send client events ("whispers", such as typing indicators) to a channel: only connections subscribed to it, any connection, or no one.</p>
+                                @error('acceptClientEventsFrom') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                            </div>
+
+                            <div class="rounded-lg border border-gray-200 p-3 space-y-3">
+                                <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
+                                    <input type="checkbox" wire:model="rateLimitEnabled" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                                    Rate limit client messages
+                                </label>
+                                <div x-show="$wire.rateLimitEnabled" class="space-y-3">
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Max Messages</label>
+                                            <input wire:model="rateLimitMaxAttempts" type="number" min="1" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none @error('rateLimitMaxAttempts') border-red-400 @enderror">
+                                            @error('rateLimitMaxAttempts') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Per (seconds)</label>
+                                            <input wire:model="rateLimitDecaySeconds" type="number" min="1" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none @error('rateLimitDecaySeconds') border-red-400 @enderror">
+                                            @error('rateLimitDecaySeconds') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                                        </div>
+                                    </div>
+                                    <label class="flex items-center gap-2 text-sm text-gray-700">
+                                        <input type="checkbox" wire:model="rateLimitTerminate" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                                        Disconnect clients that exceed the limit
+                                    </label>
+                                    <p class="text-xs text-gray-500">Counts every message a connection sends, including subscribes and client events. Over the limit, messages are rejected with an error, or with disconnect on, the connection is closed.</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

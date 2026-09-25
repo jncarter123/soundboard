@@ -7,6 +7,9 @@ use Laravel\Reverb\Application;
 
 class ReverbApp extends Model
 {
+    /** Who may send client events ("whispers"): Reverb's accepted values, plus "none" to disable them. */
+    public const CLIENT_EVENTS_FROM = ['members', 'all', 'none'];
+
     protected $fillable = [
         'name',
         'app_id',
@@ -17,10 +20,20 @@ class ReverbApp extends Model
         'activity_timeout',
         'max_message_size',
         'max_connections',
+        'accept_client_events_from',
+        'rate_limit_enabled',
+        'rate_limit_max_attempts',
+        'rate_limit_decay_seconds',
+        'rate_limit_terminate',
     ];
 
     protected $attributes = [
         'allowed_origins' => '[]',
+        'accept_client_events_from' => 'members',
+        'rate_limit_enabled' => false,
+        'rate_limit_max_attempts' => 60,
+        'rate_limit_decay_seconds' => 60,
+        'rate_limit_terminate' => false,
     ];
 
     protected function casts(): array
@@ -32,6 +45,10 @@ class ReverbApp extends Model
             'activity_timeout' => 'integer',
             'max_message_size' => 'integer',
             'max_connections' => 'integer',
+            'rate_limit_enabled' => 'boolean',
+            'rate_limit_max_attempts' => 'integer',
+            'rate_limit_decay_seconds' => 'integer',
+            'rate_limit_terminate' => 'boolean',
         ];
     }
 
@@ -46,6 +63,14 @@ class ReverbApp extends Model
             allowedOrigins: $this->allowed_origins,
             maxMessageSize: $this->max_message_size,
             maxConnections: $this->max_connections,
+            acceptClientEventsFrom: $this->accept_client_events_from,
+            // Reverb checks `enabled === true`, so these must be real booleans.
+            rateLimiting: [
+                'enabled' => (bool) $this->rate_limit_enabled,
+                'max_attempts' => (int) $this->rate_limit_max_attempts,
+                'decay_seconds' => (int) $this->rate_limit_decay_seconds,
+                'terminate_on_limit' => (bool) $this->rate_limit_terminate,
+            ],
         );
     }
 

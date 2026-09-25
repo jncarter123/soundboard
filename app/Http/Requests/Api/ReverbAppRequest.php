@@ -41,7 +41,39 @@ class ReverbAppRequest extends FormRequest
             'activity_timeout' => ['sometimes', 'integer', 'min:1'],
             'max_message_size' => ['sometimes', 'integer', 'min:1'],
             'max_connections' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'accept_client_events_from' => ['sometimes', Rule::in(ReverbApp::CLIENT_EVENTS_FROM)],
+            // Same shape as Reverb's own `rate_limiting` app config.
+            'rate_limiting' => ['sometimes', 'array:enabled,max_attempts,decay_seconds,terminate_on_limit'],
+            'rate_limiting.enabled' => ['sometimes', 'boolean'],
+            'rate_limiting.max_attempts' => ['sometimes', 'integer', 'min:1'],
+            'rate_limiting.decay_seconds' => ['sometimes', 'integer', 'min:1'],
+            'rate_limiting.terminate_on_limit' => ['sometimes', 'boolean'],
         ];
+    }
+
+    /**
+     * The validated input as model attributes: the nested `rate_limiting`
+     * object maps onto flat columns, and only fields that were sent are
+     * included, so a PATCH leaves the rest alone.
+     */
+    public function appAttributes(): array
+    {
+        $validated = $this->validated();
+        $rateLimiting = $validated['rate_limiting'] ?? [];
+        unset($validated['rate_limiting']);
+
+        foreach ([
+            'enabled' => 'rate_limit_enabled',
+            'max_attempts' => 'rate_limit_max_attempts',
+            'decay_seconds' => 'rate_limit_decay_seconds',
+            'terminate_on_limit' => 'rate_limit_terminate',
+        ] as $key => $column) {
+            if (array_key_exists($key, $rateLimiting)) {
+                $validated[$column] = $rateLimiting[$key];
+            }
+        }
+
+        return $validated;
     }
 
     public function messages(): array
