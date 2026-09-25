@@ -6,6 +6,8 @@ Reverb normally reads its applications from `config/reverb.php`, so adding an ap
 
 > Soundboard is an independent project. It is not affiliated with or endorsed by Laravel.
 
+![Connection and message history for one app over the last hour](docs/screenshots/app-history.png)
+
 ## Features
 
 - **Multi-app management**: create apps with their own credentials, allowed origins, and connection and message limits. Changes reach the running Reverb server within seconds, with no restart.
@@ -15,6 +17,16 @@ Reverb normally reads its applications from `config/reverb.php`, so adding an ap
 - **Role-based access control**: fine-grained permissions for apps, users, roles, tokens, metrics, and status. Users can never grant access they don't hold themselves.
 - **API**: manage apps and rotate credentials from scripts and CI with personal access tokens.
 - **Secure by default**: app secrets are encrypted at rest, credentials are only visible to users who can edit the app, and login is rate limited.
+
+## Screenshots
+
+**Live metrics**: current connections, channels, and subscriber counts for every app, refreshed every few seconds.
+
+![Live metrics showing connections and channels per app](docs/screenshots/live-metrics.png)
+
+**Applications**: every app on the shared Reverb server, with its origins and credentials.
+
+![Applications list](docs/screenshots/apps.png)
 
 ## Requirements
 
