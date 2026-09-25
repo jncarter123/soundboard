@@ -16,6 +16,7 @@ Reverb normally reads its applications from `config/reverb.php`, so adding an ap
 - **System status**: database, Redis, and Reverb health at a glance, plus a `/api/health` endpoint for load balancers.
 - **Role-based access control**: fine-grained permissions for apps, users, roles, tokens, metrics, and status. Users can never grant access they don't hold themselves.
 - **API**: manage apps and rotate credentials from scripts and CI with personal access tokens.
+- **Alerts** by email and signed webhook when an app nears or hits its connection limit, Reverb goes down, or metrics stop recording.
 - **Audit log**: who signed in, viewed or regenerated credentials, and changed apps, users, roles, or tokens, with the source and IP of each action.
 - **Secure by default**: app secrets are encrypted at rest, credentials are only visible to users who can edit the app, and login is rate limited.
 
@@ -82,6 +83,69 @@ The dashboard is on `127.0.0.1:8000` and Reverb on `127.0.0.1:8080`, both plain 
 - **Reverb is tuned already:** the image includes the libuv event loop and compose raises its file limit to 65,536.
 
 Images are published to Docker Hub as [`jncarter/soundboard`](https://hub.docker.com/r/jncarter/soundboard) for `linux/amd64` and `linux/arm64`, tagged by version (`1.1.0`, `1.1`, `1`), `latest`, and commit SHA. To build from source instead, clone the repository and run `docker compose up -d --build`.
+
+## Alerts
+
+Soundboard checks every minute (from the scheduler) and alerts when:
+
+| Alert | Severity | When |
+|---|---|---|
+| `connections.near_limit` | warning | An app with a connection limit reaches `ALERTS_CONNECTION_THRESHOLD` percent of it (80 by default) |
+| `connections.at_limit` | critical | An app is at its limit, so new clients are being rejected |
+| `reverb.unreachable` | critical | Reverb's HTTP API can't be reached |
+| `metrics.stale` | warning | No connection sample recorded for `ALERTS_METRICS_STALE_MINUTES` (5), usually because `pulse:check` stopped |
+
+Each alert notifies when it starts, when its severity changes, every `ALERTS_REMIND_MINUTES` (60; `0` turns reminders off) while it lasts, and once when it resolves. Active and recent alerts are also shown on the **Status** page.
+
+Configure one or both destinations, then prove they work with `php artisan soundboard:test-alert`:
+
+```dotenv
+ALERTS_MAIL_TO=ops@example.com,oncall@example.com   # needs Laravel's MAIL_* settings
+ALERTS_WEBHOOK_URL=https://example.com/hooks/soundboard
+ALERTS_WEBHOOK_SECRET=a-long-random-string          # required with a webhook: openssl rand -hex 32
+```
+
+### Webhook format
+
+A `POST` with a JSON body:
+
+```json
+{
+  "type": "soundboard.alert",
+  "version": 1,
+  "event": "triggered",
+  "alert": {
+    "id": 42,
+    "key": "connections:storefront",
+    "type": "connections.at_limit",
+    "severity": "critical",
+    "status": "active",
+    "app_id": "storefront",
+    "message": "Storefront is at its connection limit (500/500); new clients are being rejected",
+    "details": { "connections": 500, "limit": 500, "percent": 100, "threshold": 80 },
+    "triggered_at": "2026-09-25T14:03:00+00:00",
+    "resolved_at": null
+  },
+  "soundboard": { "name": "Soundboard", "url": "https://soundboard.example.com" },
+  "sent_at": "2026-09-25T14:03:01+00:00"
+}
+```
+
+`event` is `triggered`, `changed` (severity went up or down), `reminder`, `resolved`, or `test`. Use `alert.key` to group notifications about the same problem.
+
+Every request is signed. Verify it before trusting the body, and reject old timestamps to stop replays:
+
+```php
+$timestamp = $request->header('X-Soundboard-Timestamp');
+$expected = 'sha256='.hash_hmac('sha256', $timestamp.'.'.$request->getContent(), $secret);
+
+if (! hash_equals($expected, (string) $request->header('X-Soundboard-Signature'))
+    || abs(time() - (int) $timestamp) > 300) {
+    abort(401);
+}
+```
+
+A destination that fails is retried once, then logged; it never stops other destinations or the next check.
 
 ## Audit log
 
