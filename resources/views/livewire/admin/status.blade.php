@@ -110,7 +110,13 @@
                 </div>
                 <div>
                     <dt class="text-xs text-gray-500 uppercase">Scaling</dt>
-                    <dd class="text-sm font-medium text-gray-900">{{ config('reverb.servers.reverb.scaling.enabled') ? 'Enabled' : 'Disabled' }}</dd>
+                    <dd class="text-sm font-medium text-gray-900">
+                        @if (config('reverb.servers.reverb.scaling.enabled'))
+                            Enabled{{ $reverbServers ? ' · '.$reverbServers.' '.\Illuminate\Support\Str::plural('server', $reverbServers) : ' · servers unknown' }}
+                        @else
+                            Disabled
+                        @endif
+                    </dd>
                 </div>
                 <div>
                     <dt class="text-xs text-gray-500 uppercase" title="Reverb's clock compared with Soundboard's. Beyond 10 minutes Reverb rejects Soundboard's requests.">Clock</dt>

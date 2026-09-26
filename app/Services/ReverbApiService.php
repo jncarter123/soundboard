@@ -9,6 +9,7 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Redis;
 use Pusher\Pusher;
 use Throwable;
 
@@ -26,6 +27,13 @@ class ReverbApiService
     private const TIMEOUT = 3;
 
     private const CONCURRENCY = 20;
+
+    /**
+     * With scaling, presence counts are recomputed from member lists, one
+     * request per channel. Beyond this many channels the rest keep Reverb's
+     * (over-counting) figure and are marked approximate.
+     */
+    private const MAX_PRESENCE_RECOUNTS = 100;
 
     public function getConnectionCount(ReverbApp $app): ?int
     {
@@ -60,7 +68,7 @@ class ReverbApiService
             'channels' => '/channels?info=subscription_count,user_count',
         ]);
 
-        return $apps->map(fn (ReverbApp $app) => [
+        $stats = $apps->map(fn (ReverbApp $app) => [
             'app_id' => $app->app_id,
             'name' => $app->name,
             'connections' => $this->connectionsFrom($results[$app->app_id]['connections']),
@@ -68,6 +76,81 @@ class ReverbApiService
                 ? null
                 : (array) ($body['channels'] ?? []),
         ])->all();
+
+        return $this->scalingEnabled() ? $this->recountPresenceMembers($apps, $stats) : $stats;
+    }
+
+    /**
+     * How many Reverb servers share this Redis: 1 without scaling. Each
+     * server subscribes to the scaling channel, so it's that channel's
+     * subscriber count. Null when Redis can't be asked.
+     */
+    public function getServerCount(): ?int
+    {
+        if (! $this->scalingEnabled()) {
+            return 1;
+        }
+
+        try {
+            // rawCommand, so Laravel's key prefix isn't applied to the channel name.
+            $reply = Redis::connection()->client()->rawCommand(
+                'PUBSUB', 'NUMSUB', (string) config('reverb.servers.reverb.scaling.channel', 'reverb'),
+            );
+
+            return max(1, (int) ($reply[1] ?? 0));
+        } catch (Throwable $e) {
+            Log::error('Unable to count Reverb servers in Redis', ['message' => $e->getMessage()]);
+
+            return null;
+        }
+    }
+
+    public function scalingEnabled(): bool
+    {
+        return (bool) config('reverb.servers.reverb.scaling.enabled');
+    }
+
+    /**
+     * With scaling, Reverb sums each server's distinct-member count, so a
+     * user connected to two servers is counted twice. Its member list is
+     * deduplicated across servers, so count that instead.
+     *
+     * @param  Collection<int, ReverbApp>  $apps
+     */
+    private function recountPresenceMembers(Collection $apps, array $stats): array
+    {
+        $budget = self::MAX_PRESENCE_RECOUNTS;
+
+        foreach ($stats as $i => $stat) {
+            $presence = array_values(array_filter(
+                array_keys($stat['channels'] ?? []),
+                fn ($channel) => str_starts_with($channel, 'presence-'),
+            ));
+
+            if ($presence === []) {
+                continue;
+            }
+
+            $recount = array_slice($presence, 0, max(0, $budget));
+            $budget -= count($recount);
+            $app = $apps->firstWhere('app_id', $stat['app_id']);
+            $members = $recount === [] ? [] : $this->getMany(
+                collect([$app]),
+                collect($recount)->mapWithKeys(fn ($channel) => [$channel => "/channels/{$channel}/users"])->all(),
+            )[$app->app_id];
+
+            foreach ($presence as $channel) {
+                $body = $members[$channel] ?? null;
+
+                if ($body !== null) {
+                    $stats[$i]['channels'][$channel] = ['user_count' => count($body['users'] ?? [])];
+                } else {
+                    $stats[$i]['channels'][$channel] = [...(array) $stats[$i]['channels'][$channel], 'approximate' => true];
+                }
+            }
+        }
+
+        return $stats;
     }
 
     /**

@@ -1,0 +1,29 @@
+# Load balancer for Reverb replicas (compose.scaling.yaml). Each replica is a
+# separate Reverb server; Redis pub/sub keeps channels, presence, and metrics
+# consistent across them, so any client can land on any replica.
+{
+	auto_https off
+	admin off
+	log {
+		output stderr
+		format console
+	}
+}
+
+:8080 {
+	reverse_proxy {
+		# Every replica of the `reverb` service, re-resolved as it scales.
+		dynamic a {$REVERB_UPSTREAM_HOST:reverb} {$REVERB_UPSTREAM_PORT:8080} {
+			refresh 5s
+		}
+
+		# WebSockets are long-lived: balance by open connections, not requests.
+		lb_policy least_conn
+
+		health_uri /up
+		health_interval 10s
+
+		# Keep WebSocket connections open across Caddy config reloads.
+		stream_close_delay 5m
+	}
+}

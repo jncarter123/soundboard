@@ -57,8 +57,13 @@ class AlertConditions
             )]));
         }
 
+        // With scaling, each Reverb server enforces max_connections on its own
+        // connections, so the real ceiling is the limit times the servers.
+        // Unknown (Redis unreachable) counts as one: alert early, not late.
+        $servers = $this->api->getServerCount() ?? 1;
+
         return array_values(array_filter([
-            ...$apps->map(fn (ReverbApp $app) => $this->connectionCondition($app, $counts[$app->app_id] ?? null))->all(),
+            ...$apps->map(fn (ReverbApp $app) => $this->connectionCondition($app, $counts[$app->app_id] ?? null, $servers))->all(),
             $this->staleMetricsCondition($apps->min('created_at')),
             $skew,
         ]));
@@ -94,23 +99,31 @@ class AlertConditions
         );
     }
 
-    protected function connectionCondition(ReverbApp $app, ?int $connections): ?Condition
+    protected function connectionCondition(ReverbApp $app, ?int $connections, int $servers = 1): ?Condition
     {
         if ($connections === null || ! $app->max_connections) {
             return null;
         }
 
-        $limit = $app->max_connections;
+        $limit = $app->max_connections * $servers;
         $percent = (int) floor($connections / $limit * 100);
         $threshold = (int) config('alerts.connection_threshold', 80);
         $details = ['connections' => $connections, 'limit' => $limit, 'percent' => $percent, 'threshold' => $threshold];
+
+        if ($servers > 1) {
+            $details += ['limit_per_server' => $app->max_connections, 'servers' => $servers];
+        }
+
+        $limitText = $servers > 1
+            ? number_format($connections).'/'.number_format($limit).": {$app->max_connections} per server × {$servers} servers"
+            : number_format($connections).'/'.number_format($limit);
 
         if ($connections >= $limit) {
             return new Condition(
                 key: "connections:{$app->app_id}",
                 type: 'connections.at_limit',
                 severity: Alert::CRITICAL,
-                message: "{$app->name} is at its connection limit ({$connections}/{$limit}); new clients are being rejected",
+                message: "{$app->name} is at its connection limit ({$limitText}); new clients are being rejected",
                 appId: $app->app_id,
                 details: $details,
             );
@@ -121,7 +134,7 @@ class AlertConditions
                 key: "connections:{$app->app_id}",
                 type: 'connections.near_limit',
                 severity: Alert::WARNING,
-                message: "{$app->name} is at {$percent}% of its connection limit ({$connections}/{$limit})",
+                message: "{$app->name} is at {$percent}% of its connection limit ({$limitText})",
                 appId: $app->app_id,
                 details: $details,
             );

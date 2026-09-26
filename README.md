@@ -84,6 +84,25 @@ The dashboard is on `127.0.0.1:8000` and Reverb on `127.0.0.1:8080`, both plain 
 
 Images are published to Docker Hub as [`jncarter/soundboard`](https://hub.docker.com/r/jncarter/soundboard) for `linux/amd64` and `linux/arm64`, tagged by version (`1.1.0`, `1.1`, `1`), `latest`, and commit SHA. To build from source instead, clone the repository and run `docker compose up -d --build`.
 
+### Scaling Reverb
+
+One Reverb process handles its connections on a single CPU core. To use more, run several Reverb servers that share channels, presence, and metrics through Redis:
+
+```bash
+docker compose -f compose.yaml -f compose.scaling.yaml up -d
+```
+
+(or put `COMPOSE_FILE=compose.yaml:compose.scaling.yaml` in `.env`). [`compose.scaling.yaml`](compose.scaling.yaml) adds a Redis-compatible server ([Valkey](https://valkey.io)), runs `REVERB_REPLICAS` Reverb servers (3 by default), and puts a load balancer on port 8080 where Reverb used to be, so nothing else changes. An event sent to any server reaches clients on all of them.
+
+To scale across machines instead, run Reverb on each with `REVERB_SCALING_ENABLED=true` and the same `REDIS_HOST`, behind your own load balancer, and point Soundboard's `REVERB_METRICS_HOST` at any one of them.
+
+Things that work differently with more than one server:
+
+- **Connection limits are per server.** Each Reverb server enforces an app's `max_connections` on its own connections, so 3 servers with a limit of 500 allow 1,500. Soundboard counts the servers (the subscribers on Reverb's Redis channel) and shows and alerts against the combined figure.
+- **Presence member counts** are computed from each channel's member list, because Reverb's own count adds up per-server totals and counts a user connected to two servers twice.
+
+With or without scaling, clients that connect in the same instant can briefly exceed a limit, since Reverb counts a connection once it has joined a channel.
+
 ## Alerts
 
 Soundboard checks every minute (from the scheduler) and alerts when:

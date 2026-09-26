@@ -8,6 +8,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Redis;
+use Mockery;
 use Tests\TestCase;
 
 class ReverbApiServiceTest extends TestCase
@@ -141,6 +143,68 @@ class ReverbApiServiceTest extends TestCase
         Http::fake(fn () => throw new ConnectionException('Connection refused'));
 
         $this->assertNull(app(ReverbApiService::class)->getClockSkew());
+    }
+
+    public function test_server_count_is_one_without_scaling(): void
+    {
+        config(['reverb.servers.reverb.scaling.enabled' => false]);
+
+        $this->assertSame(1, app(ReverbApiService::class)->getServerCount());
+    }
+
+    public function test_server_count_is_the_scaling_channels_subscribers(): void
+    {
+        config(['reverb.servers.reverb.scaling.enabled' => true, 'reverb.servers.reverb.scaling.channel' => 'reverb']);
+        $client = Mockery::mock();
+        $client->shouldReceive('rawCommand')->with('PUBSUB', 'NUMSUB', 'reverb')->andReturn(['reverb', 3]);
+        $connection = Mockery::mock();
+        $connection->shouldReceive('client')->andReturn($client);
+        Redis::shouldReceive('connection')->andReturn($connection);
+
+        $this->assertSame(3, app(ReverbApiService::class)->getServerCount());
+    }
+
+    public function test_server_count_is_null_when_redis_fails(): void
+    {
+        config(['reverb.servers.reverb.scaling.enabled' => true]);
+        Redis::shouldReceive('connection')->andThrow(new \RuntimeException('Connection refused'));
+
+        $this->assertNull(app(ReverbApiService::class)->getServerCount());
+    }
+
+    public function test_with_scaling_presence_counts_come_from_the_deduplicated_member_list(): void
+    {
+        config(['reverb.servers.reverb.scaling.enabled' => true]);
+        $this->makeApp('a');
+
+        // What a 3-server cluster really returned: user 1 on two servers,
+        // so Reverb's summed count says 11 while there are 7 members.
+        Http::fake([
+            '*/apps/a/connections*' => Http::response(['connections' => 12]),
+            '*/apps/a/channels/presence-lobby/users*' => Http::response(['users' => array_map(fn ($id) => ['id' => $id], [1, 2, 3, 4, 5, 6, 7])]),
+            '*/apps/a/channels?*' => Http::response(['channels' => [
+                'presence-lobby' => ['user_count' => 11],
+                'orders' => ['subscription_count' => 12],
+            ]]),
+        ]);
+
+        $channels = app(ReverbApiService::class)->getAllAppsLiveStats()[0]['channels'];
+
+        $this->assertSame(['user_count' => 7], $channels['presence-lobby']);
+        $this->assertSame(['subscription_count' => 12], $channels['orders']);
+    }
+
+    public function test_without_scaling_presence_counts_are_used_as_is(): void
+    {
+        config(['reverb.servers.reverb.scaling.enabled' => false]);
+        $this->makeApp('a');
+        Http::fake([
+            '*/apps/a/connections*' => Http::response(['connections' => 3]),
+            '*/apps/a/channels?*' => Http::response(['channels' => ['presence-lobby' => ['user_count' => 3]]]),
+        ]);
+
+        $this->assertSame(['user_count' => 3], app(ReverbApiService::class)->getAllAppsLiveStats()[0]['channels']['presence-lobby']);
+        Http::assertNotSent(fn (Request $r) => str_contains($r->url(), '/users'));
     }
 
     public function test_no_apps_makes_no_requests(): void

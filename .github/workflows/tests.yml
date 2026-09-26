@@ -168,10 +168,22 @@ jobs:
           curl -fsS http://127.0.0.1:8080/up > /dev/null
           docker compose exec -T reverb php -r 'require "vendor/autoload.php"; echo get_class(React\EventLoop\Loop::get()), PHP_EOL;' | grep -q ExtUvLoop
 
+      - name: Stop the stack
+        run: docker compose down -v
+
+      - name: Start the scaled stack (Redis, 3 Reverb replicas, load balancer)
+        run: docker compose -f compose.yaml -f compose.scaling.yaml up -d --no-build --wait --wait-timeout 240
+
+      - name: Check the scaled stack
+        run: |
+          curl -fsS http://127.0.0.1:8000/api/health | tee /dev/stderr | grep -q '"redis":"ok"'
+          curl -fsS http://127.0.0.1:8080/up > /dev/null
+          docker compose -f compose.yaml -f compose.scaling.yaml exec -T app php artisan tinker --execute 'echo app(App\Services\ReverbApiService::class)->getServerCount();' | grep -qx 3
+
       - name: Show logs on failure
         if: failure()
-        run: docker compose logs
+        run: docker compose -f compose.yaml -f compose.scaling.yaml logs
 
       - name: Stop the stack
         if: always()
-        run: docker compose down -v
+        run: docker compose -f compose.yaml -f compose.scaling.yaml down -v

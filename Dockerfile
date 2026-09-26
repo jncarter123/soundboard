@@ -6,6 +6,8 @@
 #   reverb     the WebSocket server your applications connect to
 #   pulse      `pulse:check`, which records connection metrics every 15 seconds
 #   scheduler  `schedule:work`, which removes old audit log entries daily
+#   reverb-lb  Caddy load-balancing WebSocket clients across Reverb replicas,
+#              only with Redis scaling (compose.scaling.yaml)
 #
 # They share one filesystem, so the dashboard and the server it manages can
 # never disagree about what the code says.
@@ -15,12 +17,14 @@ ARG NODE_TAG=22-bookworm-slim
 
 # --- base -------------------------------------------------------------------
 # pdo_mysql for anyone storing apps in MySQL/MariaDB; SQLite is compiled in.
+# redis for Laravel's Redis connection, used by the health checks when Reverb
+# scaling is on (Reverb's own pub/sub uses a pure-PHP client).
 # pcntl lets reverb:start and pulse:check stop cleanly on SIGTERM. uv is the
 # libuv event loop from the production tuning guide: ReactPHP picks it up on
 # its own and it lifts the select() loop's 1,024-connection ceiling.
 FROM dunglas/frankenphp:${FRANKENPHP_TAG} AS base
 
-RUN install-php-extensions pdo_mysql opcache zip pcntl uv \
+RUN install-php-extensions pdo_mysql opcache zip pcntl uv redis \
     && apk add --no-cache curl
 
 WORKDIR /app

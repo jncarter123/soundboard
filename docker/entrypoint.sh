@@ -6,6 +6,7 @@
 #   reverb     `reverb:start`, the WebSocket server your applications connect to.
 #   pulse      `pulse:check`, which records each app's connection count.
 #   scheduler  `schedule:work`: daily cleanup of old audit log entries.
+#   reverb-lb  Caddy in front of several Reverb replicas (compose.scaling.yaml).
 #
 # The web container owns the migrations and the key so the three never race;
 # the others wait for it (compose holds them back until /up answers).
@@ -13,6 +14,11 @@
 set -e
 
 role="${1:-web}"
+
+# The load balancer runs no Laravel code: no key, database, or caches.
+if [ "${role}" = "reverb-lb" ]; then
+    exec frankenphp run --config /app/docker/Caddyfile.reverb-lb
+fi
 data_dir="${SOUNDBOARD_DATA_DIR:-/var/lib/soundboard}"
 key_file="${data_dir}/app_key"
 
