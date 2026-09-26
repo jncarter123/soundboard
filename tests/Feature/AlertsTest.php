@@ -105,7 +105,8 @@ class AlertsTest extends TestCase
         $this->assertSame(['triggered:connections.near_limit'], $this->check());
         $alert = Alert::active()->sole();
         $this->assertSame('Storefront is at 83% of its connection limit (250/300: 100 per server × 3 servers)', $alert->message);
-        $this->assertSame(['connections' => 250, 'limit' => 300, 'percent' => 83, 'threshold' => 80, 'limit_per_server' => 100, 'servers' => 3], $alert->details);
+        // assertEquals: MySQL and MariaDB return JSON object keys re-sorted.
+        $this->assertEquals(['connections' => 250, 'limit' => 300, 'percent' => 83, 'threshold' => 80, 'limit_per_server' => 100, 'servers' => 3], $alert->details);
     }
 
     public function test_unknown_server_count_errs_toward_alerting(): void
