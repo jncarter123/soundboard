@@ -132,7 +132,7 @@
                                     <tr>
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Channel</th>
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Subscribers</th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title="Presence channels count distinct members; others count connections">Subscribers</th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
@@ -150,10 +150,42 @@
                                                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Public</span>
                                                 @endif
                                             </td>
-                                            <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-600 text-right font-mono">
-                                                {{ $channelInfo['subscription_count'] ?? '—' }}
+                                            <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-600 text-right">
+                                                @if(str_starts_with($channelName, 'presence-'))
+                                                    @php($open = $membersOf === [$app['app_id'], $channelName])
+                                                    <button
+                                                        type="button"
+                                                        wire:click="toggleMembers(@js($app['app_id']), @js($channelName))"
+                                                        class="inline-flex items-center gap-1 text-purple-700 hover:text-purple-900"
+                                                        aria-expanded="{{ $open ? 'true' : 'false' }}"
+                                                    >
+                                                        <span class="font-mono">{{ $channelInfo['user_count'] ?? '—' }}</span>
+                                                        {{ ($channelInfo['user_count'] ?? 0) === 1 ? 'member' : 'members' }}
+                                                        <svg class="w-3.5 h-3.5 transition-transform {{ $open ? 'rotate-90' : '' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                                    </button>
+                                                @else
+                                                    <span class="font-mono">{{ $channelInfo['subscription_count'] ?? '—' }}</span>
+                                                @endif
                                             </td>
                                         </tr>
+                                        @if($membersOf === [$app['app_id'], $channelName])
+                                            <tr class="bg-purple-50/50">
+                                                <td colspan="3" class="px-6 py-3 text-sm">
+                                                    @if($members === null)
+                                                        <span class="text-red-700">Couldn't load members from Reverb.</span>
+                                                    @elseif($members === [])
+                                                        <span class="text-gray-500">No members.</span>
+                                                    @else
+                                                        <p class="text-xs text-gray-500 mb-2">Member user IDs (Reverb doesn't expose names){{ count($members) > 200 ? ', first 200 of '.count($members) : '' }}:</p>
+                                                        <div class="flex flex-wrap gap-1.5">
+                                                            @foreach(array_slice($members, 0, 200) as $memberId)
+                                                                <span class="inline-flex px-2 py-0.5 rounded bg-white border border-purple-200 text-xs font-mono text-gray-800">{{ $memberId }}</span>
+                                                            @endforeach
+                                                        </div>
+                                                    @endif
+                                                </td>
+                                            </tr>
+                                        @endif
                                     @endforeach
                                 </tbody>
                             </table>

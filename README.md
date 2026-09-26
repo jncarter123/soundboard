@@ -11,7 +11,7 @@ Reverb normally reads its applications from `config/reverb.php`, so adding an ap
 ## Features
 
 - **Multi-app management**: create apps with their own credentials, allowed origins, and connection and message limits. Changes reach the running Reverb server within seconds, with no restart.
-- **Live metrics**: current connections, channels, and subscriber counts for each app.
+- **Live metrics**: current connections, channels, and subscriber counts for each app, plus the members of each presence channel.
 - **Historical metrics**: connection and message trends over 1 hour to 7 days, recorded with Laravel Pulse.
 - **System status**: database, Redis, and Reverb health at a glance, plus a `/api/health` endpoint for load balancers.
 - **Role-based access control**: fine-grained permissions for apps, users, roles, tokens, metrics, and status. Users can never grant access they don't hold themselves.
@@ -22,7 +22,7 @@ Reverb normally reads its applications from `config/reverb.php`, so adding an ap
 
 ## Screenshots
 
-**Live metrics**: current connections, channels, and subscriber counts for every app, refreshed every few seconds.
+**Live metrics**: current connections, channels, and subscriber counts for every app, refreshed every few seconds. Presence channels show their member count; click it to list the member IDs.
 
 ![Live metrics showing connections and channels per app](docs/screenshots/live-metrics.png)
 

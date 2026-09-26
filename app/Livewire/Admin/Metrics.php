@@ -28,6 +28,12 @@ class Metrics extends Component
 
     public ?string $lastUpdated = null;
 
+    /** The presence channel whose members are shown: [app_id, channel], or null. */
+    public ?array $membersOf = null;
+
+    /** @var list<string>|null Member IDs for; null if they couldn't be loaded. */
+    public ?array $members = null;
+
     protected array $periods = [
         '1_hour' => '1 Hour',
         '6_hours' => '6 Hours',
@@ -88,6 +94,51 @@ class Metrics extends Component
         $this->loadLiveData();
     }
 
+    /**
+     * Show or hide the member list for one presence channel. The channel
+     * name comes from the browser, so it must be a presence channel the
+     * live data actually lists for that app.
+     */
+    public function toggleMembers(string $appId, string $channel): void
+    {
+        if ($this->membersOf === [$appId, $channel]) {
+            $this->membersOf = null;
+            $this->members = null;
+
+            return;
+        }
+
+        $listed = collect($this->liveData)->firstWhere('app_id', $appId)['channels'] ?? [];
+
+        if (! str_starts_with($channel, 'presence-') || ! array_key_exists($channel, (array) $listed)) {
+            return;
+        }
+
+        $this->membersOf = [$appId, $channel];
+        $this->loadMembers();
+    }
+
+    protected function loadMembers(): void
+    {
+        if ($this->membersOf === null) {
+            return;
+        }
+
+        [$appId, $channel] = $this->membersOf;
+        $app = ReverbApp::where('app_id', $appId)->first();
+        $stillListed = array_key_exists($channel, (array) (collect($this->liveData)->firstWhere('app_id', $appId)['channels'] ?? []));
+
+        // The channel emptied (Reverb drops empty channels) or the app went away.
+        if (! $app || ! $stillListed) {
+            $this->membersOf = null;
+            $this->members = null;
+
+            return;
+        }
+
+        $this->members = app(ReverbApiService::class)->getChannelMembers($app, $channel);
+    }
+
     public function refreshHistorical(): void
     {
         $this->loadHistoricalData();
@@ -100,6 +151,7 @@ class Metrics extends Component
     protected function loadLiveData(): void
     {
         $this->liveData = app(ReverbApiService::class)->getAllAppsLiveStats();
+        $this->loadMembers();
         $this->lastUpdated = now()->format('g:i:s A');
     }
 
