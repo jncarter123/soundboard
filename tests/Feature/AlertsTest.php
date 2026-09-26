@@ -31,6 +31,9 @@ class AlertsTest extends TestCase
     /** Reverb's clock minus ours, in seconds; null if Reverb can't be reached. */
     protected ?int $skew = 0;
 
+    /** Reverb servers sharing Redis; 1 without scaling. */
+    protected ?int $servers = 1;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -47,6 +50,7 @@ class AlertsTest extends TestCase
         $api = Mockery::mock(ReverbApiService::class);
         $api->shouldReceive('getConnectionCounts')->andReturnUsing(fn () => $this->counts);
         $api->shouldReceive('getClockSkew')->andReturnUsing(fn () => $this->skew);
+        $api->shouldReceive('getServerCount')->andReturnUsing(fn () => $this->servers);
         $this->app->instance(ReverbApiService::class, $api);
     }
 
@@ -86,6 +90,31 @@ class AlertsTest extends TestCase
         $this->counts = ['storefront' => 90];
         $this->assertSame(['triggered:connections.near_limit'], $this->check(), 'a recurrence is a new alert');
         $this->assertSame(2, Alert::count());
+    }
+
+    public function test_with_scaling_the_limit_is_per_server(): void
+    {
+        $this->makeApp(max: 100);
+        $this->servers = 3;
+
+        // 150 connections is half of 3 servers x 100, not "over the limit".
+        $this->counts = ['storefront' => 150];
+        $this->assertSame([], $this->check());
+
+        $this->counts = ['storefront' => 250];
+        $this->assertSame(['triggered:connections.near_limit'], $this->check());
+        $alert = Alert::active()->sole();
+        $this->assertSame('Storefront is at 83% of its connection limit (250/300: 100 per server × 3 servers)', $alert->message);
+        $this->assertSame(['connections' => 250, 'limit' => 300, 'percent' => 83, 'threshold' => 80, 'limit_per_server' => 100, 'servers' => 3], $alert->details);
+    }
+
+    public function test_unknown_server_count_errs_toward_alerting(): void
+    {
+        $this->makeApp(max: 100);
+        $this->servers = null;
+        $this->counts = ['storefront' => 100];
+
+        $this->assertSame(['triggered:connections.at_limit'], $this->check());
     }
 
     public function test_apps_without_a_limit_never_alert(): void

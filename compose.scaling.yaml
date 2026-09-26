@@ -1,0 +1,73 @@
+# Horizontal scaling for Reverb, layered over compose.yaml:
+#
+#   docker compose -f compose.yaml -f compose.scaling.yaml up -d
+#
+# or put COMPOSE_FILE=compose.yaml:compose.scaling.yaml in a .env beside
+# these files. Runs REVERB_REPLICAS Reverb servers (3 by default) that share
+# channels, presence, and metrics through Redis pub/sub, behind a load
+# balancer on the same port a single Reverb used. Each Reverb process uses one
+# CPU core, so replicas let one host use more cores; for several hosts, run
+# Reverb on each against the same Redis instead (see the README).
+
+x-scaling-env: &scaling-env
+  REVERB_SCALING_ENABLED: "true"
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+
+services:
+  app:
+    environment:
+      <<: *scaling-env
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  reverb:
+    environment:
+      <<: *scaling-env
+    # Replicas can't share a published port; clients reach them through
+    # reverb-lb, and Soundboard's metrics calls reach any one of them (with
+    # scaling on, each answers for all).
+    ports: !reset []
+    deploy:
+      replicas: ${REVERB_REPLICAS:-3}
+    depends_on:
+      app:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  reverb-lb:
+    image: ${SOUNDBOARD_IMAGE:-soundboard:latest}
+    command: ["reverb-lb"]
+    ports:
+      - "127.0.0.1:8080:8080"
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    depends_on:
+      reverb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  pulse:
+    environment:
+      <<: *scaling-env
+
+  scheduler:
+    environment:
+      <<: *scaling-env
+
+  # Valkey: the BSD-licensed, drop-in fork of Redis. Only pub/sub traffic goes
+  # through it, so nothing needs persisting. To use an existing Redis instead,
+  # drop this service and set REDIS_HOST (and REDIS_PASSWORD) in docker.env.
+  redis:
+    image: valkey/valkey:8-alpine
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped

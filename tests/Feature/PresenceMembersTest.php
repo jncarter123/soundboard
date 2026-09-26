@@ -77,9 +77,8 @@ class PresenceMembersTest extends TestCase
         $this->fakeReverb();
 
         Livewire::test(Metrics::class)
-            ->assertSeeHtml('<span class="font-mono">3</span>')
-            ->assertSee('members')
-            ->assertSeeHtml('<span class="font-mono">4</span>');
+            ->assertSeeInOrder(['presence-room.1', 'Presence', '3', 'members'])
+            ->assertSeeInOrder(['announcements', 'Public', '4']);
     }
 
     public function test_members_toggle_open_refresh_and_close(): void

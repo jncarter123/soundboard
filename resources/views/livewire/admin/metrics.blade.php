@@ -121,6 +121,9 @@
                                 @endphp
                                 {{ $appModel && $appModel->max_connections ? number_format($appModel->max_connections) : 'Unlimited' }}
                             </p>
+                            @if($appModel && $appModel->max_connections && ($servers ?? 1) > 1)
+                                <p class="mt-1 text-xs text-gray-500">per server · {{ number_format($appModel->max_connections * $servers) }} across {{ $servers }} servers</p>
+                            @endif
                         </div>
                     </div>
 
@@ -159,7 +162,7 @@
                                                         class="inline-flex items-center gap-1 text-purple-700 hover:text-purple-900"
                                                         aria-expanded="{{ $open ? 'true' : 'false' }}"
                                                     >
-                                                        <span class="font-mono">{{ $channelInfo['user_count'] ?? '—' }}</span>
+                                                        <span class="font-mono" @if($channelInfo['approximate'] ?? false) title="Approximate: Reverb over-counts members who are connected to more than one server" @endif>{{ ($channelInfo['approximate'] ?? false) ? '≈' : '' }}{{ $channelInfo['user_count'] ?? '—' }}</span>
                                                         {{ ($channelInfo['user_count'] ?? 0) === 1 ? 'member' : 'members' }}
                                                         <svg class="w-3.5 h-3.5 transition-transform {{ $open ? 'rotate-90' : '' }}" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                                                     </button>

@@ -28,6 +28,9 @@ class Metrics extends Component
 
     public ?string $lastUpdated = null;
 
+    /** Reverb servers sharing Redis (1 without scaling; null if unknown). */
+    public ?int $servers = 1;
+
     /** The presence channel whose members are shown: [app_id, channel], or null. */
     public ?array $membersOf = null;
 
@@ -151,6 +154,7 @@ class Metrics extends Component
     protected function loadLiveData(): void
     {
         $this->liveData = app(ReverbApiService::class)->getAllAppsLiveStats();
+        $this->servers = app(ReverbApiService::class)->getServerCount();
         $this->loadMembers();
         $this->lastUpdated = now()->format('g:i:s A');
     }

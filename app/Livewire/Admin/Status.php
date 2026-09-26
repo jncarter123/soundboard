@@ -111,6 +111,7 @@ class Status extends Component
         return view('livewire.admin.status', [
             'activeAlerts' => Alert::active()->orderByRaw("severity = 'critical' desc")->latest('triggered_at')->get(),
             'recentAlerts' => Alert::whereNotNull('resolved_at')->latest('resolved_at')->limit(5)->get(),
+            'reverbServers' => app(ReverbApiService::class)->getServerCount(),
             'alertDestinations' => array_filter([
                 config('alerts.mail_to') ? 'email' : null,
                 config('alerts.webhook_url') ? 'webhook' : null,
