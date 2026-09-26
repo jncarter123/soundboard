@@ -55,7 +55,9 @@ class ReverbApiService
         // Both endpoints for every app go out in one concurrent batch.
         $results = $this->getMany($apps, [
             'connections' => '/connections',
-            'channels' => '/channels?info=subscription_count',
+            // Reverb returns subscription_count only for non-presence channels
+            // and user_count (distinct members) only for presence channels.
+            'channels' => '/channels?info=subscription_count,user_count',
         ]);
 
         return $apps->map(fn (ReverbApp $app) => [
@@ -66,6 +68,21 @@ class ReverbApiService
                 ? null
                 : (array) ($body['channels'] ?? []),
         ])->all();
+    }
+
+    /**
+     * The distinct user IDs in a presence channel. Reverb exposes only the
+     * IDs, not the user_info clients send when joining.
+     *
+     * @return list<string>|null Null when the request failed.
+     */
+    public function getChannelMembers(ReverbApp $app, string $channel): ?array
+    {
+        $body = $this->getMany(collect([$app]), ['users' => "/channels/{$channel}/users"])[$app->app_id]['users'];
+
+        return $body === null
+            ? null
+            : array_values(array_map(fn ($user) => (string) ($user['id'] ?? ''), $body['users'] ?? []));
     }
 
     private function connectionsFrom(?array $body): ?int
