@@ -85,6 +85,33 @@ class ReverbApiService
             : array_values(array_map(fn ($user) => (string) ($user['id'] ?? ''), $body['users'] ?? []));
     }
 
+    /**
+     * How far Reverb's clock is from ours, in seconds (positive: Reverb is
+     * ahead), read from the Date header on its unsigned /up endpoint. Reverb
+     * 1.12+ rejects signed API requests more than ten minutes off its own
+     * clock, so this still works when every other call is being refused.
+     *
+     * Compared with the midpoint of the request to cancel network delay;
+     * accurate to about a second, the resolution of the Date header.
+     *
+     * @return int|null Null when Reverb can't be reached or sends no Date.
+     */
+    public function getClockSkew(): ?int
+    {
+        try {
+            $sentAt = microtime(true);
+            $response = Http::connectTimeout(self::CONNECT_TIMEOUT)->timeout(self::TIMEOUT)->get($this->baseUrl().'/up');
+            $midpoint = ($sentAt + microtime(true)) / 2;
+        } catch (Throwable) {
+            return null;
+        }
+
+        $date = $response->header('Date');
+        $reverbTime = $date !== '' ? strtotime($date) : false;
+
+        return $reverbTime === false ? null : (int) round($reverbTime - $midpoint);
+    }
+
     private function connectionsFrom(?array $body): ?int
     {
         return isset($body['connections']) ? (int) $body['connections'] : null;

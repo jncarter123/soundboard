@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Alerts\AlertConditions;
 use App\Alerts\AlertMonitor;
 use App\Livewire\Admin\Status;
 use App\Models\Alert;
@@ -27,6 +28,9 @@ class AlertsTest extends TestCase
     /** @var array<string, int|null> */
     protected array $counts = [];
 
+    /** Reverb's clock minus ours, in seconds; null if Reverb can't be reached. */
+    protected ?int $skew = 0;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -42,6 +46,7 @@ class AlertsTest extends TestCase
 
         $api = Mockery::mock(ReverbApiService::class);
         $api->shouldReceive('getConnectionCounts')->andReturnUsing(fn () => $this->counts);
+        $api->shouldReceive('getClockSkew')->andReturnUsing(fn () => $this->skew);
         $this->app->instance(ReverbApiService::class, $api);
     }
 
@@ -138,6 +143,66 @@ class AlertsTest extends TestCase
             ...($sqlite ? ['key_hash' => md5('storefront')] : []),
         ]);
         $this->assertSame(['resolved:metrics.stale'], $this->check());
+    }
+
+    public function test_clock_skew_warns_before_requests_start_failing(): void
+    {
+        $this->makeApp();
+        $this->counts = ['storefront' => 3];
+
+        $this->skew = 120;
+        $this->assertSame([], $this->check(), 'two minutes is fine');
+
+        $this->skew = -420;
+        $this->assertSame(['triggered:reverb.clock_skew'], $this->check());
+        $alert = Alert::active()->sole();
+        $this->assertSame(Alert::WARNING, $alert->severity);
+        $this->assertStringContainsString('7 minutes behind', $alert->message);
+
+        $this->skew = 0;
+        $this->assertSame(['resolved:reverb.clock_skew'], $this->check());
+    }
+
+    public function test_critical_skew_replaces_the_misleading_unreachable_alert(): void
+    {
+        $this->makeApp();
+
+        // Reverb refuses every signed request, so all polls fail...
+        $this->counts = ['storefront' => null];
+        $this->skew = 900;
+
+        // ...but the alert names the real cause, not an outage.
+        $this->assertSame(['triggered:reverb.clock_skew'], $this->check());
+        $alert = Alert::active()->sole();
+        $this->assertTrue($alert->isCritical());
+        $this->assertStringContainsString('15 minutes ahead of', $alert->message);
+        $this->assertStringContainsString('rejecting', $alert->message);
+        $this->assertSame(900, $alert->details['skew_seconds']);
+    }
+
+    public function test_skew_is_described_in_whole_minutes(): void
+    {
+        $this->assertSame('15 minutes', AlertConditions::describeSkew(899));
+        $this->assertSame('7 minutes', AlertConditions::describeSkew(-419));
+        $this->assertSame('1 hour 5 minutes', AlertConditions::describeSkew(3900));
+        $this->assertSame('45 seconds', AlertConditions::describeSkew(45));
+        $this->assertSame('15m', AlertConditions::describeSkew(899, short: true));
+    }
+
+    public function test_skew_is_checked_even_with_no_apps(): void
+    {
+        $this->skew = 3600;
+
+        $this->assertSame(['triggered:reverb.clock_skew'], $this->check());
+    }
+
+    public function test_real_outage_still_reports_unreachable(): void
+    {
+        $this->makeApp();
+        $this->counts = ['storefront' => null];
+        $this->skew = null; // /up can't be reached either
+
+        $this->assertSame(['triggered:reverb.unreachable'], $this->check());
     }
 
     public function test_webhook_is_signed_and_documented_shape(): void
@@ -248,6 +313,13 @@ class AlertsTest extends TestCase
         Livewire::actingAs(User::where('email', 'admin@example.com')->first())
             ->test(Status::class)
             ->assertSee('Storefront is at 90% of its connection limit (90/100)')
-            ->assertSee('No destinations configured');
+            ->assertSee('No destinations configured')
+            ->assertSee('In sync');
+
+        $this->skew = 900;
+        Livewire::actingAs(User::where('email', 'admin@example.com')->first())
+            ->test(Status::class)
+            ->assertSee('15m ahead')
+            ->assertSeeHtml('text-red-700');
     }
 }

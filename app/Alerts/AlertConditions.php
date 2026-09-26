@@ -6,6 +6,7 @@ use App\Models\Alert;
 use App\Models\ReverbApp;
 use App\Services\ReverbApiService;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterval;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -13,6 +14,12 @@ use Illuminate\Support\Facades\DB;
  */
 class AlertConditions
 {
+    /**
+     * Reverb (1.12+) rejects signed API requests whose timestamp is further
+     * than this from its own clock.
+     */
+    public const REVERB_SIGNATURE_TOLERANCE = 600;
+
     public function __construct(
         protected ReverbApiService $api,
     ) {}
@@ -22,10 +29,18 @@ class AlertConditions
      */
     public function current(): array
     {
+        $skew = $this->clockSkewCondition($this->api->getClockSkew());
         $apps = ReverbApp::all();
 
         if ($apps->isEmpty()) {
-            return [];
+            return array_values(array_filter([$skew]));
+        }
+
+        // Beyond Reverb's tolerance every signed request is refused, so the
+        // polls below would fail and look like an outage. The skew is the
+        // cause; report only that.
+        if ($skew?->severity === Alert::CRITICAL) {
+            return [$skew];
         }
 
         $counts = $this->api->getConnectionCounts($apps);
@@ -33,19 +48,50 @@ class AlertConditions
         // Every poll failed: Reverb itself is down or unreachable. Per-app
         // checks would only repeat that, so report it once.
         if (collect($counts)->every(fn ($count) => $count === null)) {
-            return [new Condition(
+            return array_values(array_filter([$skew, new Condition(
                 key: 'reverb.unreachable',
                 type: 'reverb.unreachable',
                 severity: Alert::CRITICAL,
                 message: "Reverb is unreachable at {$this->reverbTarget()}",
                 details: ['target' => $this->reverbTarget()],
-            )];
+            )]));
         }
 
         return array_values(array_filter([
             ...$apps->map(fn (ReverbApp $app) => $this->connectionCondition($app, $counts[$app->app_id] ?? null))->all(),
             $this->staleMetricsCondition($apps->min('created_at')),
+            $skew,
         ]));
+    }
+
+    /**
+     * Soundboard signs every Reverb API request with its current time, so
+     * the two clocks must agree to within Reverb's tolerance. Warns from
+     * alerts.clock_skew_warning_seconds (5 minutes) so there's time to fix
+     * time sync before requests start failing.
+     */
+    protected function clockSkewCondition(?int $skew): ?Condition
+    {
+        $warnAt = (int) config('alerts.clock_skew_warning_seconds', 300);
+
+        if ($skew === null || abs($skew) < $warnAt) {
+            return null;
+        }
+
+        $drift = self::describeSkew($skew);
+        $direction = $skew > 0 ? 'ahead of' : 'behind';
+        $critical = abs($skew) > self::REVERB_SIGNATURE_TOLERANCE;
+        $details = ['skew_seconds' => $skew, 'warning_seconds' => $warnAt, 'reverb_tolerance_seconds' => self::REVERB_SIGNATURE_TOLERANCE];
+
+        return new Condition(
+            key: 'reverb.clock_skew',
+            type: 'reverb.clock_skew',
+            severity: $critical ? Alert::CRITICAL : Alert::WARNING,
+            message: $critical
+                ? "Reverb's clock is {$drift} {$direction} Soundboard's, so Reverb is rejecting Soundboard's requests (the limit is 10 minutes); check time sync (NTP) on both hosts"
+                : "Reverb's clock is {$drift} {$direction} Soundboard's; Reverb will reject Soundboard's requests beyond 10 minutes, so check time sync (NTP) on both hosts",
+            details: $details,
+        );
     }
 
     protected function connectionCondition(ReverbApp $app, ?int $connections): ?Condition
@@ -118,6 +164,20 @@ class AlertConditions
                 : 'No connection metrics have been recorded yet; is pulse:check running?',
             details: ['last_recorded_at' => $newest !== null ? $since->toIso8601String() : null],
         );
+    }
+
+    /**
+     * "15 minutes" / "15m". Measurement is only good to about a second, so
+     * anything over a minute is rounded to whole minutes.
+     */
+    public static function describeSkew(int $seconds, bool $short = false): string
+    {
+        $seconds = abs($seconds);
+        $interval = $seconds >= 60
+            ? CarbonInterval::minutes((int) round($seconds / 60))
+            : CarbonInterval::seconds($seconds);
+
+        return $interval->cascade()->forHumans(['parts' => 2, 'short' => $short]);
     }
 
     protected function reverbTarget(): string
