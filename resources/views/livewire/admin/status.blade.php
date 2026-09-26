@@ -99,7 +99,7 @@
     <div class="mb-8">
         <h2 class="text-lg font-semibold text-gray-900 mb-4">Reverb Server</h2>
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <dl class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <dl class="grid grid-cols-2 sm:grid-cols-5 gap-4">
                 <div>
                     <dt class="text-xs text-gray-500 uppercase">Host</dt>
                     <dd class="text-sm font-medium text-gray-900 font-mono">{{ config('reverb.servers.reverb.host') }}:{{ config('reverb.servers.reverb.port') }}</dd>
@@ -111,6 +111,13 @@
                 <div>
                     <dt class="text-xs text-gray-500 uppercase">Scaling</dt>
                     <dd class="text-sm font-medium text-gray-900">{{ config('reverb.servers.reverb.scaling.enabled') ? 'Enabled' : 'Disabled' }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-gray-500 uppercase" title="Reverb's clock compared with Soundboard's. Beyond 10 minutes Reverb rejects Soundboard's requests.">Clock</dt>
+                    @php($clock = $checks['clock'] ?? ['level' => 'unknown', 'detail' => '—'])
+                    <dd class="text-sm font-medium {{ match ($clock['level']) { 'critical' => 'text-red-700', 'warning' => 'text-yellow-700', 'ok' => 'text-green-700', default => 'text-gray-500' } }}">
+                        {{ $clock['detail'] }}
+                    </dd>
                 </div>
                 <div>
                     <dt class="text-xs text-gray-500 uppercase">Max Request Size</dt>

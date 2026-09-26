@@ -127,6 +127,22 @@ class ReverbApiServiceTest extends TestCase
         });
     }
 
+    public function test_clock_skew_is_read_from_reverbs_date_header(): void
+    {
+        Http::fake(['127.0.0.1:8080/up' => Http::response('', 200, ['Date' => now()->addMinutes(12)->toRfc7231String()])]);
+
+        $skew = app(ReverbApiService::class)->getClockSkew();
+
+        $this->assertEqualsWithDelta(720, $skew, 2);
+    }
+
+    public function test_clock_skew_is_null_when_reverb_is_unreachable(): void
+    {
+        Http::fake(fn () => throw new ConnectionException('Connection refused'));
+
+        $this->assertNull(app(ReverbApiService::class)->getClockSkew());
+    }
+
     public function test_no_apps_makes_no_requests(): void
     {
         Http::fake();

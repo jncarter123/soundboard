@@ -94,6 +94,8 @@ Soundboard checks every minute (from the scheduler) and alerts when:
 | `connections.at_limit` | critical | An app is at its limit, so new clients are being rejected |
 | `reverb.unreachable` | critical | Reverb's HTTP API can't be reached |
 | `metrics.stale` | warning | No connection sample recorded for `ALERTS_METRICS_STALE_MINUTES` (5), usually because `pulse:check` stopped |
+| `reverb.clock_skew` | warning | Reverb's clock and Soundboard's differ by `ALERTS_CLOCK_SKEW_WARNING_SECONDS` (300) or more |
+| `reverb.clock_skew` | critical | They differ by more than 10 minutes, so Reverb rejects Soundboard's requests. Reported instead of `reverb.unreachable`, since Reverb itself is fine |
 
 Each alert notifies when it starts, when its severity changes, every `ALERTS_REMIND_MINUTES` (60; `0` turns reminders off) while it lasts, and once when it resolves. Active and recent alerts are also shown on the **Status** page.
 
@@ -224,6 +226,8 @@ Besides `name` and `allowed_origins`, create and update accept Reverb's per-app 
 `APP_KEY` encrypts the stored app secrets. Back it up and never change it on an existing install, or every secret becomes unreadable.
 
 ## Production
+
+Soundboard signs every request to Reverb's API with the current time, and Reverb rejects signatures more than 10 minutes from its own clock. If they run on different hosts, keep time sync (NTP, e.g. `systemd-timesyncd` or `chrony`) running on both; containers share their host's clock. The Status page shows the measured difference, and Soundboard alerts before it becomes a problem.
 
 See the [production tuning guide](docs/reverb-production-tuning.md) for file descriptor limits, the event loop, Supervisor, and Nginx configuration for a server with many long-lived connections.
 

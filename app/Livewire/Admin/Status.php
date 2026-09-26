@@ -2,8 +2,10 @@
 
 namespace App\Livewire\Admin;
 
+use App\Alerts\AlertConditions;
 use App\Models\Alert;
 use App\Models\ReverbApp;
+use App\Services\ReverbApiService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
 use Livewire\Component;
@@ -32,6 +34,33 @@ class Status extends Component
         $this->checks = [
             'database' => $this->checkDatabase(),
             'redis' => $this->checkRedis(),
+            'clock' => $this->checkClock(),
+        ];
+    }
+
+    /**
+     * Reverb's clock against ours. Beyond 10 minutes Reverb rejects
+     * Soundboard's signed requests.
+     */
+    private function checkClock(): array
+    {
+        $skew = app(ReverbApiService::class)->getClockSkew();
+
+        if ($skew === null) {
+            return ['level' => 'unknown', 'detail' => 'Reverb not reachable'];
+        }
+
+        $drift = abs($skew) < 1
+            ? 'In sync'
+            : AlertConditions::describeSkew($skew, short: true).($skew > 0 ? ' ahead' : ' behind');
+
+        return [
+            'level' => match (true) {
+                abs($skew) > AlertConditions::REVERB_SIGNATURE_TOLERANCE => 'critical',
+                abs($skew) >= (int) config('alerts.clock_skew_warning_seconds', 300) => 'warning',
+                default => 'ok',
+            },
+            'detail' => $drift,
         ];
     }
 

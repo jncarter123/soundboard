@@ -39,4 +39,8 @@ return [
 
     'remind_minutes' => (int) env('ALERTS_REMIND_MINUTES', 60),
 
+    // Warn when Reverb's clock differs from Soundboard's by this many
+    // seconds. Beyond 600 Reverb rejects Soundboard's requests (critical).
+    'clock_skew_warning_seconds' => (int) env('ALERTS_CLOCK_SKEW_WARNING_SECONDS', 300),
+
 ];
