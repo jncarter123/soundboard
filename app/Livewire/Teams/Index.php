@@ -247,9 +247,7 @@ class Index extends Component
 
         // Owners without teams.read see just the teams they own.
         $teams = Team::withCount(['members', 'apps'])
-            ->unless($user->can('teams.read'), fn ($q) => $q->whereIn('id', $user->teams
-                ->filter(fn (Team $team) => $user->teamRole($team->id) === TeamRole::Owner)
-                ->modelKeys()))
+            ->unless($user->can('teams.read'), fn ($q) => $q->whereIn('id', $user->ownedTeamIds()))
             ->orderBy('name')
             ->get();
         $membersTeam = $this->membersTeamId

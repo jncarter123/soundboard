@@ -206,6 +206,8 @@ The **Audit Log** page (the `audit.read` permission, which Super Admin has) reco
 - Changes to apps, users, roles, role permissions, user roles, teams, and team members, with old and new values
 - Password changes and resets, and API tokens created or revoked
 
+Team owners can open the Audit Log too, but see only their teams' entries: changes to the team's apps (including credentials viewed or regenerated, and apps since deleted) and to its members. Each entry keeps the team its app belonged to at the time. Owners don't see clients' IP addresses.
+
 App keys, secrets, and passwords are never recorded. Entries can't be edited or deleted from the dashboard; entries older than `ACTIVITYLOG_CLEAN_AFTER_DAYS` (365 by default) are removed daily by the scheduler.
 
 ## Locked out?

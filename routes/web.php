@@ -35,6 +35,6 @@ Route::middleware('auth')->prefix('admin')->group(function () {
     Route::get('/tokens', TokensIndex::class)->name('admin.tokens');
     Route::get('/apps', AppsIndex::class)->name('admin.apps')->middleware('can:viewAny,App\Models\ReverbApp');
     Route::get('/metrics', Metrics::class)->name('admin.metrics')->middleware('can:viewAnyMetrics,App\Models\ReverbApp');
-    Route::get('/audit', AuditIndex::class)->name('admin.audit')->middleware('can:audit.read');
+    Route::get('/audit', AuditIndex::class)->name('admin.audit')->middleware('can:viewAuditLog');
     Route::get('/status', Status::class)->name('admin.status')->middleware('can:status.read');
 });
