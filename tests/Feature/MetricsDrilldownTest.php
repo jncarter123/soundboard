@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Livewire\Admin\Metrics;
 use App\Models\ReverbApp;
+use App\Models\User;
 use Carbon\CarbonImmutable;
+use Database\Seeders\AdminUserSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
@@ -13,6 +15,14 @@ use Tests\TestCase;
 class MetricsDrilldownTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->seed(AdminUserSeeder::class);
+        $this->actingAs(User::where('email', 'admin@example.com')->firstOrFail());
+    }
 
     protected function makeApp(): ReverbApp
     {

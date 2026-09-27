@@ -8,7 +8,8 @@ use Illuminate\Validation\Rule;
 
 /**
  * Validates create (POST) and partial update (PATCH) requests for an app.
- * Authorization is handled by the route's `can:` middleware.
+ * Authorization is handled by the route's `can:` middleware and, for the
+ * team, by the controller.
  */
 class ReverbAppRequest extends FormRequest
 {
@@ -34,6 +35,8 @@ class ReverbAppRequest extends FormRequest
             'app_id' => $creating
                 ? ['required', 'string', 'max:255', 'regex:/^[A-Za-z0-9._-]+$/', Rule::unique('reverb_apps', 'app_id')]
                 : ['prohibited'],
+            // Null for an app that belongs to no team.
+            'team_id' => ['sometimes', 'nullable', 'integer', Rule::exists('teams', 'id')],
             // Reverb rejects every connection when this is empty.
             'allowed_origins' => [$required, 'array', 'min:1'],
             'allowed_origins.*' => ['string', 'max:255'],

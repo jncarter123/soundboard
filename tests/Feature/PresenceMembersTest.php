@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Livewire\Admin\Metrics;
 use App\Models\ReverbApp;
+use App\Models\User;
 use App\Services\ReverbApiService;
+use Database\Seeders\AdminUserSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -18,6 +20,9 @@ class PresenceMembersTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $this->seed(AdminUserSeeder::class);
+        $this->actingAs(User::where('email', 'admin@example.com')->firstOrFail());
 
         config(['reverb.metrics.host' => '127.0.0.1', 'reverb.metrics.port' => 8080, 'reverb.metrics.scheme' => 'http']);
         ReverbApp::create([

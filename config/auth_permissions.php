@@ -10,6 +10,8 @@ return [
         'roles.create',
         'roles.update',
         'roles.delete',
+        'teams.read',
+        'teams.manage',
         'tokens.manage',
         'tokens.manage-own',
         'apps.read',

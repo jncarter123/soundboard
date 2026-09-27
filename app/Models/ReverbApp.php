@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Laravel\Reverb\Application;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
@@ -25,6 +27,7 @@ class ReverbApp extends Model
         'max_message_size',
         'max_connections',
         'max_messages_per_day',
+        'team_id',
         'accept_client_events_from',
         'rate_limit_enabled',
         'rate_limit_max_attempts',
@@ -45,6 +48,7 @@ class ReverbApp extends Model
     {
         return [
             'secret' => 'encrypted',
+            'team_id' => 'integer',
             'allowed_origins' => 'array',
             'ping_interval' => 'integer',
             'activity_timeout' => 'integer',
@@ -56,6 +60,22 @@ class ReverbApp extends Model
             'rate_limit_decay_seconds' => 'integer',
             'rate_limit_terminate' => 'boolean',
         ];
+    }
+
+    public function team(): BelongsTo
+    {
+        return $this->belongsTo(Team::class);
+    }
+
+    /**
+     * Apps the user can see: every app with the given global permission,
+     * otherwise only their teams' apps.
+     */
+    public function scopeVisibleTo(Builder $query, User $user, string $permission = 'apps.read'): void
+    {
+        if (! $user->can($permission)) {
+            $query->whereIn('team_id', $user->teams->pluck('id'));
+        }
     }
 
     /**

@@ -48,7 +48,7 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
                             <div class="flex items-center justify-end gap-2">
-                                @if (! $role->isAdmin())
+                                @if (! $role->isSuperAdmin())
                                 @can('roles.update')
                                 <button
                                     wire:click="editRole({{ $role->id }})"

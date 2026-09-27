@@ -3,7 +3,10 @@
 namespace App\Livewire\Apps;
 
 use App\Models\ReverbApp;
+use App\Models\Team;
 use App\Support\Audit;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -20,6 +23,9 @@ class Index extends Component
     public string $name = '';
 
     public string $appId = '';
+
+    /** The team the app belongs to; null for none. */
+    public ?int $teamId = null;
 
     public string $allowedOrigins = '';
 
@@ -60,19 +66,27 @@ class Index extends Component
 
     public function openCreate(): void
     {
-        $this->authorize('apps.create');
+        $teams = $this->creatableTeams();
+
+        if (! auth()->user()->can('apps.create') && $teams->isEmpty()) {
+            throw new AuthorizationException;
+        }
+
         $this->resetForm();
+        // Without the global permission the app must go in one of their teams.
+        $this->teamId = auth()->user()->can('apps.create') ? null : $teams->first()->id;
         $this->creating = true;
     }
 
     public function editApp(int $id): void
     {
-        $this->authorize('apps.update');
-        $app = ReverbApp::findOrFail($id);
+        $app = $this->findApp($id);
+        $this->authorize('update', $app);
         $this->editingAppId = $id;
         $this->creating = false;
         $this->name = $app->name;
         $this->appId = $app->app_id;
+        $this->teamId = $app->team_id;
         $this->allowedOrigins = implode(', ', $app->allowed_origins);
         $this->pingInterval = $app->ping_interval;
         $this->activityTimeout = $app->activity_timeout;
@@ -88,11 +102,12 @@ class Index extends Component
 
     public function saveCreate(): void
     {
-        $this->authorize('apps.create');
         $this->validate($this->createRules());
+        $this->authorize('create', [ReverbApp::class, Team::find($this->teamId)]);
 
         $app = ReverbApp::create([
             'app_id' => $this->appId,
+            'team_id' => $this->teamId,
             'key' => ReverbApp::generateKey(),
             'secret' => ReverbApp::generateSecret(),
             ...$this->settingsAttributes(),
@@ -105,21 +120,28 @@ class Index extends Component
 
     public function saveEdit(): void
     {
-        $this->authorize('apps.update');
+        $app = $this->findApp($this->editingAppId);
+        $this->authorize('update', $app);
         $this->validate($this->editRules());
+
+        $attributes = $this->settingsAttributes();
+
+        if ($this->teamId !== $app->team_id) {
+            $this->authorize('changeTeam', $app);
+            $attributes['team_id'] = $this->teamId;
+        }
 
         // app_id is immutable: clients connect with it and Pulse metrics are
         // keyed by it, so changing it would break both.
-        $app = ReverbApp::findOrFail($this->editingAppId);
-        $app->update($this->settingsAttributes());
+        $app->update($attributes);
 
         $this->closeModal();
     }
 
     public function regenerateCredentials(int $id): void
     {
-        $this->authorize('apps.update');
-        $app = ReverbApp::findOrFail($id);
+        $app = $this->findApp($id);
+        $this->authorize('update', $app);
 
         $app->update([
             'key' => ReverbApp::generateKey(),
@@ -132,8 +154,8 @@ class Index extends Component
 
     public function revealCredentials(int $id): void
     {
-        $this->authorize('apps.update');
-        $app = ReverbApp::findOrFail($id);
+        $app = $this->findApp($id);
+        $this->authorize('update', $app);
         Audit::log('credentials.viewed', 'Viewed app credentials', $app);
         $this->revealAppId = $app->id;
     }
@@ -145,8 +167,9 @@ class Index extends Component
 
     public function deleteApp(int $id): void
     {
-        $this->authorize('apps.delete');
-        ReverbApp::findOrFail($id)->delete();
+        $app = $this->findApp($id);
+        $this->authorize('delete', $app);
+        $app->delete();
     }
 
     public function closeModal(): void
@@ -159,7 +182,10 @@ class Index extends Component
 
     public function render()
     {
-        $apps = ReverbApp::query()
+        $user = auth()->user();
+
+        $apps = ReverbApp::visibleTo($user)
+            ->with('team')
             ->when($this->search, fn ($q) => $q->where(function ($q) {
                 $q->where('name', 'like', "%{$this->search}%")
                     ->orWhere('app_id', 'like', "%{$this->search}%");
@@ -167,18 +193,55 @@ class Index extends Component
             ->orderBy('name')
             ->paginate(15);
 
-        $credentials = $this->revealAppId !== null && auth()->user()->can('apps.update')
-            ? ReverbApp::find($this->revealAppId)?->only(['key', 'secret'])
-            : null;
+        $revealed = $this->revealAppId !== null ? ReverbApp::visibleTo($user)->find($this->revealAppId) : null;
+        $credentials = $revealed && $user->can('update', $revealed) ? $revealed->only(['key', 'secret']) : null;
 
-        return view('livewire.apps.index', compact('apps', 'credentials'))
-            ->layout('components.layouts.app');
+        $creatableTeams = $this->creatableTeams();
+
+        return view('livewire.apps.index', [
+            'apps' => $apps,
+            'credentials' => $credentials,
+            'canCreate' => $user->can('apps.create') || $creatableTeams->isNotEmpty(),
+            // The team choices in the form: where new apps can go, or when
+            // editing, every team for those who may move apps.
+            'teamOptions' => $this->editingAppId ? Team::orderBy('name')->get() : $creatableTeams,
+            'canChooseNoTeam' => $this->editingAppId ? $user->can('apps.update') : $user->can('apps.create'),
+            'canChangeTeam' => $this->editingAppId === null || $user->can('apps.update'),
+        ])->layout('components.layouts.app');
+    }
+
+    /**
+     * An app the current user can see; others are not found.
+     */
+    private function findApp(?int $id): ReverbApp
+    {
+        return ReverbApp::visibleTo(auth()->user())->findOrFail($id);
+    }
+
+    /**
+     * Teams the current user may create apps in: all of them with the global
+     * permission, otherwise those where their role allows it.
+     *
+     * @return Collection<int, Team>
+     */
+    private function creatableTeams(): Collection
+    {
+        $user = auth()->user();
+
+        if ($user->can('apps.create')) {
+            return Team::orderBy('name')->get();
+        }
+
+        return $user->teams
+            ->filter(fn (Team $team) => $user->teamRole($team->id)?->grants('apps.create'))
+            ->sortBy('name')
+            ->values();
     }
 
     private function resetForm(): void
     {
         $this->reset([
-            'name', 'appId', 'allowedOrigins', 'pingInterval', 'activityTimeout', 'maxMessageSize', 'maxConnections', 'maxMessagesPerDay',
+            'name', 'appId', 'teamId', 'allowedOrigins', 'pingInterval', 'activityTimeout', 'maxMessageSize', 'maxConnections', 'maxMessagesPerDay',
             'acceptClientEventsFrom', 'rateLimitEnabled', 'rateLimitMaxAttempts', 'rateLimitDecaySeconds', 'rateLimitTerminate',
         ]);
     }
@@ -238,6 +301,7 @@ class Index extends Component
     {
         return [
             'name' => ['required', 'string', 'max:255'],
+            'teamId' => ['nullable', 'integer', Rule::exists('teams', 'id')],
             'appId' => ['required', 'string', 'max:255', 'regex:/^[A-Za-z0-9._-]+$/', 'unique:reverb_apps,app_id'],
             'allowedOrigins' => ['required', 'string', $this->originsRule()],
             'pingInterval' => ['required', 'integer', 'min:1'],
@@ -252,6 +316,7 @@ class Index extends Component
     {
         return [
             'name' => ['required', 'string', 'max:255'],
+            'teamId' => ['nullable', 'integer', Rule::exists('teams', 'id')],
             'allowedOrigins' => ['required', 'string', $this->originsRule()],
             'pingInterval' => ['required', 'integer', 'min:1'],
             'activityTimeout' => ['required', 'integer', 'min:1'],

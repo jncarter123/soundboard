@@ -19,6 +19,7 @@ class ReverbAppResource extends JsonResource
         return [
             'app_id' => $this->app_id,
             'name' => $this->name,
+            'team_id' => $this->team_id,
             'allowed_origins' => $this->allowed_origins,
             'ping_interval' => $this->ping_interval,
             'activity_timeout' => $this->activity_timeout,

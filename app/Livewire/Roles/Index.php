@@ -43,13 +43,13 @@ class Index extends Component
         $this->authorize($this->editingRoleId ? 'roles.update' : 'roles.create');
         $this->validate([
             'roleName' => [
-                'required', 'string', 'max:255', Rule::notIn([Role::ADMIN]),
+                'required', 'string', 'max:255', Rule::notIn([Role::SUPER_ADMIN]),
                 Rule::unique('roles', 'name')->where('guard_name', 'web')->ignore($this->editingRoleId),
             ],
             'selectedPermissions' => ['array'],
             'selectedPermissions.*' => ['string', Rule::in(config('auth_permissions.permissions', []))],
         ], [
-            'roleName.not_in' => 'The '.Role::ADMIN.' role name is reserved.',
+            'roleName.not_in' => 'The '.Role::SUPER_ADMIN.' role name is reserved.',
         ]);
 
         $role = $this->editingRoleId ? Role::with('permissions')->findOrFail($this->editingRoleId) : null;
@@ -94,8 +94,8 @@ class Index extends Component
      */
     private function authorizeManageRole(Role $role): void
     {
-        if ($role->isAdmin()) {
-            throw new AuthorizationException('The '.Role::ADMIN.' role cannot be modified.');
+        if ($role->isSuperAdmin()) {
+            throw new AuthorizationException('The '.Role::SUPER_ADMIN.' role cannot be modified.');
         }
 
         if (! auth()->user()->holdsAllPermissions($role->permissions)) {

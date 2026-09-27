@@ -19,9 +19,9 @@ class AddUser extends Command
     protected $signature = 'soundboard:add-user
                             {--name= : Display name}
                             {--email= : Email address to sign in with}
-                            {--role=* : Role to assign, e.g. --role=Admin (repeatable)}';
+                            {--role=* : Role to assign, e.g. --role="Super Admin" (repeatable)}';
 
-    protected $description = 'Create a user, e.g. the first admin on a new install';
+    protected $description = 'Create a user, e.g. the first Super Admin on a new install';
 
     public function handle(): int
     {
@@ -32,7 +32,11 @@ class AddUser extends Command
     {
         $name = $this->option('name') ?: $this->ask('Name');
         $email = $this->option('email') ?: $this->ask('Email');
-        $roles = $this->option('role');
+        // "Admin" was Super Admin's name before teams; older install scripts still pass it.
+        $roles = array_map(
+            fn (string $role) => $role === 'Admin' && ! Role::where('name', 'Admin')->exists() ? Role::SUPER_ADMIN : $role,
+            $this->option('role'),
+        );
         $input = $this->readNewPassword();
 
         if ($input === null) {

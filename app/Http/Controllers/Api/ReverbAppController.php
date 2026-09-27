@@ -6,20 +6,26 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\ReverbAppRequest;
 use App\Http\Resources\ReverbAppResource;
 use App\Models\ReverbApp;
+use App\Models\Team;
 use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Gate;
 
 class ReverbAppController extends Controller
 {
     public function index(): AnonymousResourceCollection
     {
-        return ReverbAppResource::collection(ReverbApp::orderBy('name')->paginate(50));
+        return ReverbAppResource::collection(
+            ReverbApp::visibleTo(request()->user())->orderBy('name')->paginate(50)
+        );
     }
 
     public function store(ReverbAppRequest $request): JsonResponse
     {
+        Gate::authorize('create', [ReverbApp::class, Team::find($request->validated('team_id'))]);
+
         $app = ReverbApp::create([
             ...$request->appAttributes(),
             'key' => ReverbApp::generateKey(),
@@ -39,6 +45,10 @@ class ReverbAppController extends Controller
 
     public function update(ReverbAppRequest $request, ReverbApp $app): ReverbAppResource
     {
+        if ($request->has('team_id') && $request->integer('team_id') !== (int) $app->team_id) {
+            Gate::authorize('changeTeam', $app);
+        }
+
         $app->update($request->appAttributes());
 
         return ReverbAppResource::make($app);

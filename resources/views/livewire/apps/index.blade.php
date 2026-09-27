@@ -9,7 +9,7 @@
                 placeholder="Search by name or app ID..."
                 class="w-72 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
             >
-            @can('apps.create')
+            @if ($canCreate)
             <button
                 wire:click="openCreate"
                 class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
@@ -19,7 +19,7 @@
                 </svg>
                 New App
             </button>
-            @endcan
+            @endif
         </div>
     </div>
 
@@ -30,6 +30,7 @@
                 <tr>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">App ID</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Origins</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -43,6 +44,9 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                             <code class="text-xs bg-gray-100 px-2 py-0.5 rounded">{{ $app->app_id }}</code>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                            {{ $app->team?->name ?? '—' }}
                         </td>
                         <td class="px-6 py-4 text-sm text-gray-600">
                             @if (count($app->allowed_origins) > 0)
@@ -60,7 +64,7 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
                             <div class="flex items-center justify-end gap-2">
-                                @can('apps.update')
+                                @can('update', $app)
                                 <button
                                     wire:click="revealCredentials({{ $app->id }})"
                                     class="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
@@ -74,7 +78,7 @@
                                     Edit
                                 </button>
                                 @endcan
-                                @can('apps.delete')
+                                @can('delete', $app)
                                 <button
                                     wire:click="deleteApp({{ $app->id }})"
                                     wire:confirm="Delete this application? All clients using its credentials will be disconnected."
@@ -154,6 +158,35 @@
                         @endif
                         @error('appId') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
                     </div>
+
+                    {{-- Team --}}
+                    @if ($teamOptions->isNotEmpty() || $teamId !== null)
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Team</label>
+                        @if ($canChangeTeam)
+                            <select
+                                wire:model="teamId"
+                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none @error('teamId') border-red-400 @enderror"
+                            >
+                                @if ($canChooseNoTeam)
+                                    <option value="">No team</option>
+                                @endif
+                                @foreach ($teamOptions as $team)
+                                    <option value="{{ $team->id }}">{{ $team->name }}</option>
+                                @endforeach
+                            </select>
+                            <p class="mt-1 text-xs text-gray-500">Team members can see and manage the app according to their team role. With no team, only users with server-wide app permissions can.</p>
+                        @else
+                            <input
+                                value="{{ $teamOptions->firstWhere('id', $teamId)?->name ?? 'No team' }}"
+                                type="text"
+                                disabled
+                                class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500"
+                            >
+                        @endif
+                        @error('teamId') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                    </div>
+                    @endif
 
                     {{-- Allowed Origins --}}
                     <div>

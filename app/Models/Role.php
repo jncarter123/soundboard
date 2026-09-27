@@ -11,10 +11,11 @@ class Role extends SpatieRole
     use LogsActivity;
 
     /**
-     * The built-in role that always holds every permission. It cannot be
-     * renamed, edited, or deleted, and must always have at least one member.
+     * The built-in role with control of the whole server: it passes every
+     * authorization check. It cannot be renamed, edited, or deleted, and
+     * must always have at least one member.
      */
-    public const ADMIN = 'Admin';
+    public const SUPER_ADMIN = 'Super Admin';
 
     /**
      * Renames are audited here. Permission changes go through a pivot table,
@@ -29,8 +30,8 @@ class Role extends SpatieRole
             ->setDescriptionForEvent(fn (string $event) => ucfirst($event).' role');
     }
 
-    public function isAdmin(): bool
+    public function isSuperAdmin(): bool
     {
-        return $this->name === self::ADMIN;
+        return $this->name === self::SUPER_ADMIN;
     }
 }

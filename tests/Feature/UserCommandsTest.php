@@ -22,17 +22,17 @@ class UserCommandsTest extends TestCase
     {
         $this->seed(AdminUserSeeder::class);
 
-        $this->artisan('soundboard:add-user', ['--role' => ['Admin']])
+        $this->artisan('soundboard:add-user', ['--role' => ['Super Admin']])
             ->expectsQuestion('Name', 'Priya Shah')
             ->expectsQuestion('Email', 'priya@example.com')
             ->expectsQuestion('Password (leave blank to generate one)', 'priya-password-123')
             ->expectsQuestion('Confirm password', 'priya-password-123')
-            ->expectsOutputToContain('Created priya@example.com with role Admin.')
+            ->expectsOutputToContain('Created priya@example.com with role Super Admin.')
             ->assertSuccessful();
 
         $user = User::where('email', 'priya@example.com')->firstOrFail();
         $this->assertTrue(Hash::check('priya-password-123', $user->password));
-        $this->assertTrue($user->hasRole(Role::ADMIN));
+        $this->assertTrue($user->hasRole(Role::SUPER_ADMIN));
     }
 
     public function test_add_user_without_a_terminal_generates_and_prints_a_password(): void
@@ -49,12 +49,21 @@ class UserCommandsTest extends TestCase
     public function test_fresh_install_can_create_the_first_admin_without_seeding(): void
     {
         $this->artisan('soundboard:add-user', [
-            '--name' => 'First', '--email' => 'first@example.com', '--role' => ['Admin'], '--no-interaction' => true,
+            '--name' => 'First', '--email' => 'first@example.com', '--role' => ['Super Admin'], '--no-interaction' => true,
         ])->assertSuccessful();
 
         $user = User::where('email', 'first@example.com')->firstOrFail();
-        $this->assertTrue($user->hasRole(Role::ADMIN));
+        $this->assertTrue($user->hasRole(Role::SUPER_ADMIN));
         $this->assertTrue($user->holdsAllPermissions(config('auth_permissions.permissions')));
+    }
+
+    public function test_the_old_admin_role_name_still_creates_a_super_admin(): void
+    {
+        $this->artisan('soundboard:add-user', [
+            '--name' => 'First', '--email' => 'first@example.com', '--role' => ['Admin'], '--no-interaction' => true,
+        ])->assertSuccessful();
+
+        $this->assertTrue(User::where('email', 'first@example.com')->firstOrFail()->hasRole(Role::SUPER_ADMIN));
     }
 
     public function test_printed_passwords_are_exact_even_with_console_markup_characters(): void

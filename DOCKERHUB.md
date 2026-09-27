@@ -36,7 +36,7 @@ curl -fsSL -o docker.env https://raw.githubusercontent.com/jncarter123/soundboar
 echo "SOUNDBOARD_IMAGE=jncarter/soundboard:2" > .env
 
 docker compose up -d
-docker compose exec app php artisan soundboard:add-user --role=Admin
+docker compose exec app php artisan soundboard:add-user --role="Super Admin"
 ```
 
 The dashboard listens on `127.0.0.1:8000` and Reverb on `127.0.0.1:8080`. Both are plain HTTP on loopback, meant for a reverse proxy in front that terminates TLS.

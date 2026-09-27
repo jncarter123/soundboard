@@ -134,8 +134,8 @@ class Index extends Component
 
         $this->authorizeManageUser($user);
 
-        if ($user->hasRole(Role::ADMIN) && User::role(Role::ADMIN)->count() <= 1) {
-            throw new AuthorizationException('You cannot delete the last '.Role::ADMIN.'.');
+        if ($user->hasRole(Role::SUPER_ADMIN) && User::role(Role::SUPER_ADMIN)->count() <= 1) {
+            throw new AuthorizationException('You cannot delete the last '.Role::SUPER_ADMIN.'.');
         }
 
         // Sanctum doesn't remove tokens with their owner; roles are detached by Spatie.
@@ -149,11 +149,12 @@ class Index extends Component
 
     /**
      * Editing a user's email or password effectively grants control of their
-     * account, so only allow it for users with no more access than the actor.
+     * account, so only allow it for users with no more access than the actor,
+     * counting what their team roles give them.
      */
     private function authorizeManageUser(User $user): void
     {
-        if (! auth()->user()->holdsAllPermissions($user->getAllPermissions())) {
+        if (! auth()->user()->holdsAllPermissions($user->reachablePermissions())) {
             throw new AuthorizationException('You cannot manage a user with permissions you do not hold.');
         }
     }
@@ -190,11 +191,11 @@ class Index extends Component
             return false;
         }
 
-        $removingAdmin = $current->contains(fn (Role $role) => $role->isAdmin())
-            && ! $new->contains(fn (Role $role) => $role->isAdmin());
+        $removingAdmin = $current->contains(fn (Role $role) => $role->isSuperAdmin())
+            && ! $new->contains(fn (Role $role) => $role->isSuperAdmin());
 
-        if ($removingAdmin && User::role(Role::ADMIN)->count() <= 1) {
-            $this->addError('selectedRoles', 'At least one user must keep the '.Role::ADMIN.' role.');
+        if ($removingAdmin && User::role(Role::SUPER_ADMIN)->count() <= 1) {
+            $this->addError('selectedRoles', 'At least one user must keep the '.Role::SUPER_ADMIN.' role.');
 
             return false;
         }
