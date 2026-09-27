@@ -126,6 +126,82 @@ class AlertsTest extends TestCase
         $this->assertSame([], $this->check());
     }
 
+    /**
+     * Messages as Pulse's 24-hour aggregates store them, in 1,440-second
+     * buckets. Sent is split over two buckets to check they're summed.
+     */
+    protected function recordMessages(string $appId, int $sent, int $received = 0, ?int $at = null): void
+    {
+        $at ??= now()->getTimestamp();
+        $bucket = (int) (floor($at / 1440) * 1440);
+        $sqlite = DB::connection()->getDriverName() === 'sqlite';
+        $row = fn (string $type, int $value, int $bucket) => [
+            'bucket' => $bucket, 'period' => 1440, 'type' => $type, 'key' => $appId,
+            'aggregate' => 'count', 'value' => $value, 'count' => 1,
+            ...($sqlite ? ['key_hash' => md5($appId)] : []),
+        ];
+
+        // Replaces what an earlier call stored, so each call sets the totals.
+        DB::table('pulse_aggregates')->where('key', $appId)->whereIn('bucket', [$bucket, $bucket - 1440])->delete();
+        DB::table('pulse_aggregates')->insert([
+            $row('reverb_message:sent', intdiv($sent, 2), $bucket),
+            $row('reverb_message:sent', $sent - intdiv($sent, 2), $bucket - 1440),
+            $row('reverb_message:received', $received, $bucket),
+        ]);
+    }
+
+    public function test_daily_message_limit_lifecycle(): void
+    {
+        // 12:00 UTC, so both of recordMessages' buckets fall on the same day.
+        $this->travelTo(now('UTC')->startOfDay()->addHours(12));
+        $this->makeApp(max: null)->update(['max_messages_per_day' => 1000]);
+        $this->counts = ['storefront' => 1];
+
+        $this->recordMessages('storefront', sent: 600, received: 100);
+        $this->assertSame([], $this->check());
+
+        $this->recordMessages('storefront', sent: 700, received: 150);
+        $this->assertSame(['triggered:messages.near_limit'], $this->check());
+        $alert = Alert::active()->sole();
+        $this->assertSame('Storefront has used 85% of its daily message limit (850/1,000 today, UTC)', $alert->message);
+        $this->assertEquals(['messages' => 850, 'limit' => 1000, 'percent' => 85, 'threshold' => 80], $alert->details);
+
+        // At the limit is fine; only going past it is.
+        $this->recordMessages('storefront', sent: 900, received: 100);
+        $this->assertSame([], $this->check());
+
+        $this->recordMessages('storefront', sent: 1200, received: 100);
+        $this->assertSame(['changed:messages.over_limit'], $this->check());
+        $this->assertTrue(Alert::active()->sole()->isCritical());
+
+        // Counts start again at midnight UTC.
+        $this->travelTo(now('UTC')->addDay()->startOfDay()->addMinutes(5));
+        $this->assertSame(['resolved:messages.over_limit'], $this->check());
+    }
+
+    public function test_message_limit_ignores_yesterday_and_unlimited_apps(): void
+    {
+        $this->travelTo(now('UTC')->startOfDay()->addHours(12));
+        $this->makeApp('limited', max: null)->update(['max_messages_per_day' => 100]);
+        $this->makeApp('unlimited', max: null);
+        $this->counts = ['limited' => 1, 'unlimited' => 1];
+
+        $this->recordMessages('limited', sent: 5000, at: now()->subDay()->getTimestamp());
+        $this->recordMessages('unlimited', sent: 5000);
+
+        $this->assertSame([], $this->check());
+    }
+
+    public function test_message_limit_is_checked_while_reverb_is_unreachable(): void
+    {
+        $this->travelTo(now('UTC')->startOfDay()->addHours(12));
+        $this->makeApp(max: null)->update(['max_messages_per_day' => 100]);
+        $this->counts = ['storefront' => null];
+        $this->recordMessages('storefront', sent: 500);
+
+        $this->assertEqualsCanonicalizing(['triggered:reverb.unreachable', 'triggered:messages.over_limit'], $this->check());
+    }
+
     public function test_reminders_repeat_after_the_interval(): void
     {
         $this->makeApp();

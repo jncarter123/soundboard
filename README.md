@@ -11,7 +11,7 @@ Reverb normally reads its applications from `config/reverb.php`, so adding an ap
 ## Features
 
 - **Multi-app management**: create apps with their own credentials, allowed origins, and connection and message limits. Changes reach the running Reverb server within seconds, with no restart.
-- **Live metrics**: current connections, channels, and subscriber counts for each app, plus the members of each presence channel.
+- **Live metrics**: current connections, channels, subscriber counts, and messages today for each app, plus the members of each presence channel.
 - **Historical metrics**: connection and message trends over 1 hour to 7 days, recorded with Laravel Pulse.
 - **System status**: database, Redis, and Reverb health at a glance, plus a `/api/health` endpoint for load balancers.
 - **Role-based access control**: fine-grained permissions for apps, users, roles, tokens, metrics, and status. Users can never grant access they don't hold themselves.
@@ -22,7 +22,7 @@ Reverb normally reads its applications from `config/reverb.php`, so adding an ap
 
 ## Screenshots
 
-**Live metrics**: current connections, channels, and subscriber counts for every app, refreshed every few seconds. Presence channels show their member count; click it to list the member IDs.
+**Live metrics**: current connections, channels, and subscriber counts for every app, refreshed every few seconds, with the messages each app has sent and received today (UTC) against its daily message limit. Presence channels show their member count; click it to list the member IDs.
 
 ![Live metrics showing connections and channels per app](docs/screenshots/live-metrics.png)
 
@@ -111,6 +111,8 @@ Soundboard checks every minute (from the scheduler) and alerts when:
 |---|---|---|
 | `connections.near_limit` | warning | An app with a connection limit reaches `ALERTS_CONNECTION_THRESHOLD` percent of it (80 by default) |
 | `connections.at_limit` | critical | An app is at its limit, so new clients are being rejected |
+| `messages.near_limit` | warning | An app with a daily message limit has used `ALERTS_MESSAGE_THRESHOLD` percent of it today (80 by default) |
+| `messages.over_limit` | critical | An app has gone over its daily message limit. Resolves at midnight UTC, when counts start again |
 | `reverb.unreachable` | critical | Reverb's HTTP API can't be reached |
 | `metrics.stale` | warning | No connection sample recorded for `ALERTS_METRICS_STALE_MINUTES` (5), usually because `pulse:check` stopped |
 | `reverb.clock_skew` | warning | Reverb's clock and Soundboard's differ by `ALERTS_CLOCK_SKEW_WARNING_SECONDS` (300) or more |
@@ -167,6 +169,12 @@ if (! hash_equals($expected, (string) $request->header('X-Soundboard-Signature')
 ```
 
 A destination that fails is retried once, then logged; it never stops other destinations or the next check.
+
+### Daily message limits
+
+Give an app a **Daily Message Limit** to be alerted when it sends and receives more than expected, say from a runaway client or a broadcast loop. Reverb has no such setting, so this is a soft limit: Soundboard alerts, but Reverb keeps delivering messages. To stop a noisy client, use the app's per-connection rate limit, which Reverb does enforce.
+
+The count is messages sent plus received since midnight UTC, as Reverb's Pulse recorder counts them. Sent counts each delivery to each client, so one broadcast to 1,000 subscribers is 1,000 messages, and includes Reverb's own protocol messages such as replies to pings. It reaches Soundboard every 15 seconds or so.
 
 ## Audit log
 
@@ -227,7 +235,7 @@ curl -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" https://sou
 
 Requests are limited to 60 per minute per user.
 
-Besides `name` and `allowed_origins`, create and update accept Reverb's per-app options: `ping_interval`, `activity_timeout`, `max_message_size`, `max_connections`, `accept_client_events_from` (`members`, `all`, or `none`), and `rate_limiting`, which takes the same shape as Reverb's own config:
+Besides `name` and `allowed_origins`, create and update accept Reverb's per-app options: `ping_interval`, `activity_timeout`, `max_message_size`, `max_connections`, `accept_client_events_from` (`members`, `all`, or `none`), and `rate_limiting`, which takes the same shape as Reverb's own config. They also accept `max_messages_per_day`, Soundboard's own [daily message limit](#daily-message-limits) (`null` for none):
 
 ```json
 { "rate_limiting": { "enabled": true, "max_attempts": 60, "decay_seconds": 60, "terminate_on_limit": false } }

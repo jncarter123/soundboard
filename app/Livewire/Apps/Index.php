@@ -31,6 +31,8 @@ class Index extends Component
 
     public ?int $maxConnections = null;
 
+    public ?int $maxMessagesPerDay = null;
+
     public string $acceptClientEventsFrom = 'members';
 
     public bool $rateLimitEnabled = false;
@@ -76,6 +78,7 @@ class Index extends Component
         $this->activityTimeout = $app->activity_timeout;
         $this->maxMessageSize = $app->max_message_size;
         $this->maxConnections = $app->max_connections;
+        $this->maxMessagesPerDay = $app->max_messages_per_day;
         $this->acceptClientEventsFrom = $app->accept_client_events_from;
         $this->rateLimitEnabled = $app->rate_limit_enabled;
         $this->rateLimitMaxAttempts = $app->rate_limit_max_attempts;
@@ -175,7 +178,7 @@ class Index extends Component
     private function resetForm(): void
     {
         $this->reset([
-            'name', 'appId', 'allowedOrigins', 'pingInterval', 'activityTimeout', 'maxMessageSize', 'maxConnections',
+            'name', 'appId', 'allowedOrigins', 'pingInterval', 'activityTimeout', 'maxMessageSize', 'maxConnections', 'maxMessagesPerDay',
             'acceptClientEventsFrom', 'rateLimitEnabled', 'rateLimitMaxAttempts', 'rateLimitDecaySeconds', 'rateLimitTerminate',
         ]);
     }
@@ -192,6 +195,7 @@ class Index extends Component
             'activity_timeout' => $this->activityTimeout,
             'max_message_size' => $this->maxMessageSize,
             'max_connections' => $this->maxConnections,
+            'max_messages_per_day' => $this->maxMessagesPerDay,
             'accept_client_events_from' => $this->acceptClientEventsFrom,
             'rate_limit_enabled' => $this->rateLimitEnabled,
             'rate_limit_max_attempts' => $this->rateLimitMaxAttempts,
@@ -203,6 +207,7 @@ class Index extends Component
     private function settingsRules(): array
     {
         return [
+            'maxMessagesPerDay' => ['nullable', 'integer', 'min:1'],
             'acceptClientEventsFrom' => ['required', Rule::in(ReverbApp::CLIENT_EVENTS_FROM)],
             'rateLimitEnabled' => ['boolean'],
             'rateLimitMaxAttempts' => ['required', 'integer', 'min:1'],
