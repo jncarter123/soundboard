@@ -19,8 +19,11 @@
                     Dashboard
                 </a>
                 {{-- Admin submenu --}}
-                @php $canApps = auth()->user()->can('viewAny', \App\Models\ReverbApp::class); @endphp
-                @if ($canApps || auth()->user()->canAny(['users.read', 'roles.read', 'teams.read', 'tokens.manage', 'tokens.manage-own']))
+                @php
+                    $canApps = auth()->user()->can('viewAny', \App\Models\ReverbApp::class);
+                    $canTeams = auth()->user()->can('viewAny', \App\Models\Team::class);
+                @endphp
+                @if ($canApps || $canTeams || auth()->user()->canAny(['users.read', 'roles.read', 'tokens.manage', 'tokens.manage-own']))
                     @php $adminActive = request()->routeIs('admin.users', 'admin.roles', 'admin.teams', 'admin.tokens', 'admin.apps'); @endphp
                     <div x-data="{ open: false }" class="relative" @click.outside="open = false">
                         <button @click="open = !open"
@@ -44,12 +47,12 @@
                                     Roles
                                 </a>
                             @endcan
-                            @can('teams.read')
+                            @if ($canTeams)
                                 <a href="{{ route('admin.teams') }}"
                                    class="block px-4 py-2 text-sm {{ request()->routeIs('admin.teams') ? 'text-blue-600 bg-blue-50 font-medium' : 'text-gray-700 hover:bg-gray-50' }}">
                                     Teams
                                 </a>
-                            @endcan
+                            @endif
                             @if (auth()->user()->canAny(['tokens.manage', 'tokens.manage-own']))
                                 <a href="{{ route('admin.tokens') }}"
                                    class="block px-4 py-2 text-sm {{ request()->routeIs('admin.tokens') ? 'text-blue-600 bg-blue-50 font-medium' : 'text-gray-700 hover:bg-gray-50' }}">

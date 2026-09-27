@@ -14,7 +14,8 @@ use Livewire\Component;
 /**
  * Teams and their members. A team role gives its members, on the team's
  * apps, the access the matching global permissions give on every app, so
- * assigning or removing a role requires holding those permissions.
+ * with teams.manage, assigning or removing a role requires holding those
+ * permissions. A team's owners manage its members too; see mayAssign().
  */
 class Index extends Component
 {
@@ -28,7 +29,7 @@ class Index extends Component
     #[Locked]
     public ?int $membersTeamId = null;
 
-    public string $newMemberId = '';
+    public string $newMemberEmail = '';
 
     public string $newMemberRole = 'viewer';
 
@@ -94,51 +95,58 @@ class Index extends Component
 
     public function showMembers(int $teamId): void
     {
-        $this->authorize('teams.read');
-        $this->membersTeamId = Team::findOrFail($teamId)->id;
-        $this->reset(['newMemberId', 'newMemberRole']);
+        $team = Team::findOrFail($teamId);
+        $this->authorize('view', $team);
+        $this->membersTeamId = $team->id;
+        $this->reset(['newMemberEmail', 'newMemberRole']);
         $this->resetValidation();
     }
 
     public function closeMembers(): void
     {
         $this->membersTeamId = null;
-        $this->reset(['newMemberId', 'newMemberRole']);
+        $this->reset(['newMemberEmail', 'newMemberRole']);
         $this->resetValidation();
     }
 
     public function addMember(): void
     {
-        $this->authorize('teams.manage');
         $team = Team::findOrFail($this->membersTeamId);
+        $this->authorize('manageMembers', $team);
 
         $this->validate([
-            'newMemberId' => ['required', 'integer', Rule::exists('users', 'id'), Rule::unique('team_user', 'user_id')->where('team_id', $team->id)],
+            'newMemberEmail' => ['required', 'email', Rule::exists('users', 'email')],
             'newMemberRole' => ['required', Rule::enum(TeamRole::class)],
         ], [
-            'newMemberId.required' => 'Choose a user.',
-            'newMemberId.unique' => 'That user is already a member.',
+            'newMemberEmail.exists' => 'No user has that email address.',
         ]);
+
+        $user = User::where('email', $this->newMemberEmail)->firstOrFail();
+
+        if ($team->members()->whereKey($user->id)->exists()) {
+            $this->addError('newMemberEmail', 'That user is already a member.');
+
+            return;
+        }
 
         $role = TeamRole::from($this->newMemberRole);
 
-        if (! $this->holdsRole($role)) {
+        if (! $this->mayAssign($team, $role)) {
             $this->addError('newMemberRole', 'You cannot assign a role with permissions you do not hold.');
 
             return;
         }
 
-        $user = User::findOrFail($this->newMemberId);
         $team->members()->attach($user, ['role' => $role->value]);
         Audit::log('team.member_added', 'Added team member', $team, ['user' => $user->email, 'role' => $role->value]);
 
-        $this->reset(['newMemberId', 'newMemberRole']);
+        $this->reset(['newMemberEmail', 'newMemberRole']);
     }
 
     public function changeMemberRole(int $userId, string $role): void
     {
-        $this->authorize('teams.manage');
         $team = Team::findOrFail($this->membersTeamId);
+        $this->authorize('manageMembers', $team);
         $member = $team->members()->findOrFail($userId);
         $from = TeamRole::from($member->pivot->role);
         $to = TeamRole::tryFrom($role) ?? throw new AuthorizationException('Unknown team role.');
@@ -147,9 +155,13 @@ class Index extends Component
             return;
         }
 
-        if (! $this->holdsRole($from) || ! $this->holdsRole($to)) {
+        if (! $this->mayAssign($team, $from) || ! $this->mayAssign($team, $to)) {
             $this->addError('membership', 'You cannot assign or remove a role with permissions you do not hold.');
 
+            return;
+        }
+
+        if ($this->removesLastOwner($team, $from)) {
             return;
         }
 
@@ -163,14 +175,18 @@ class Index extends Component
 
     public function removeMember(int $userId): void
     {
-        $this->authorize('teams.manage');
         $team = Team::findOrFail($this->membersTeamId);
+        $this->authorize('manageMembers', $team);
         $member = $team->members()->findOrFail($userId);
         $role = TeamRole::from($member->pivot->role);
 
-        if (! $this->holdsRole($role)) {
+        if (! $this->mayAssign($team, $role)) {
             $this->addError('membership', 'You cannot remove a role with permissions you do not hold.');
 
+            return;
+        }
+
+        if ($this->removesLastOwner($team, $role)) {
             return;
         }
 
@@ -191,19 +207,62 @@ class Index extends Component
         return auth()->user()->holdsAllPermissions($role->permissions());
     }
 
+    /**
+     * Whether the current user may give or take away this role in the team.
+     * With teams.manage, only roles whose permissions they hold. A team's
+     * owners may assign any role in it: a team role reaches only the team's
+     * apps, which owners already fully control.
+     */
+    private function mayAssign(Team $team, TeamRole $role): bool
+    {
+        $user = auth()->user();
+
+        return ($user->can('teams.manage') && $this->holdsRole($role))
+            || $user->teamRole($team->id) === TeamRole::Owner;
+    }
+
+    /**
+     * A team keeps at least one owner unless someone with teams.manage, who
+     * can add one back, says otherwise. Adds a form error and returns true
+     * if the change would leave it with none.
+     */
+    private function removesLastOwner(Team $team, TeamRole $from): bool
+    {
+        if ($from !== TeamRole::Owner || auth()->user()->can('teams.manage')) {
+            return false;
+        }
+
+        if ($team->members()->wherePivot('role', TeamRole::Owner->value)->count() > 1) {
+            return false;
+        }
+
+        $this->addError('membership', 'A team must keep at least one owner.');
+
+        return true;
+    }
+
     public function render()
     {
-        $teams = Team::withCount(['members', 'apps'])->orderBy('name')->get();
+        $user = auth()->user();
+
+        // Owners without teams.read see just the teams they own.
+        $teams = Team::withCount(['members', 'apps'])
+            ->unless($user->can('teams.read'), fn ($q) => $q->whereIn('id', $user->teams
+                ->filter(fn (Team $team) => $user->teamRole($team->id) === TeamRole::Owner)
+                ->modelKeys()))
+            ->orderBy('name')
+            ->get();
         $membersTeam = $this->membersTeamId
             ? Team::with(['members' => fn ($q) => $q->orderBy('name'), 'apps' => fn ($q) => $q->orderBy('name')])->find($this->membersTeamId)
             : null;
 
+        if ($membersTeam && ! $user->can('view', $membersTeam)) {
+            $membersTeam = null;
+        }
+
         return view('livewire.teams.index', [
             'teams' => $teams,
             'membersTeam' => $membersTeam,
-            'candidates' => $membersTeam
-                ? User::whereNotIn('id', $membersTeam->members->modelKeys())->orderBy('name')->get(['id', 'name', 'email'])
-                : collect(),
             'roles' => TeamRole::cases(),
         ])->layout('components.layouts.app');
     }
