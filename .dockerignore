@@ -15,6 +15,7 @@ storage/pail
 docker.env
 database/*.sqlite
 docs
+DOCKERHUB.md
 tests
 .phpunit.cache
 .phpunit.result.cache

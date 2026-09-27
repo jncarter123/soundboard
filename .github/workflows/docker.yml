@@ -81,3 +81,30 @@ jobs:
             composer_auth={"github-oauth":{"github.com":"${{ secrets.GITHUB_TOKEN }}"}}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Docker Hub's Overview tab, from DOCKERHUB.md, updated with each release so
+  # it describes the image just published. Manual runs leave it alone. A job
+  # of its own, so a failure here doesn't mark the pushed images as failed and
+  # can be re-run without rebuilding them.
+  overview:
+    needs: push
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Needs a personal access token with Read, Write, Delete scope, which the
+      # image push doesn't. Set DOCKERHUB_DESCRIPTION_TOKEN if DOCKERHUB_TOKEN
+      # has less; this fails with "Forbidden" otherwise.
+      - name: Update the Docker Hub overview
+        uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5.0.0
+        with:
+          username: ${{ env.NAMESPACE }}
+          password: ${{ secrets.DOCKERHUB_DESCRIPTION_TOKEN || secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ env.NAMESPACE }}/soundboard
+          readme-filepath: ./DOCKERHUB.md
+          short-description: A multi-app control panel for Laravel Reverb, with live metrics and alerts
