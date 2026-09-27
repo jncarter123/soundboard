@@ -41,6 +41,8 @@ class ReverbAppRequest extends FormRequest
             'activity_timeout' => ['sometimes', 'integer', 'min:1'],
             'max_message_size' => ['sometimes', 'integer', 'min:1'],
             'max_connections' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            // Soundboard's own soft limit; Reverb doesn't enforce it.
+            'max_messages_per_day' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'accept_client_events_from' => ['sometimes', Rule::in(ReverbApp::CLIENT_EVENTS_FROM)],
             // Same shape as Reverb's own `rate_limiting` app config.
             'rate_limiting' => ['sometimes', 'array:enabled,max_attempts,decay_seconds,terminate_on_limit'],

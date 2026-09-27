@@ -24,6 +24,7 @@ class ReverbAppResource extends JsonResource
             'activity_timeout' => $this->activity_timeout,
             'max_message_size' => $this->max_message_size,
             'max_connections' => $this->max_connections,
+            'max_messages_per_day' => $this->max_messages_per_day,
             'accept_client_events_from' => $this->accept_client_events_from,
             'rate_limiting' => [
                 'enabled' => $this->rate_limit_enabled,

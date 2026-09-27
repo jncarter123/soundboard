@@ -35,6 +35,10 @@ return [
 
     'connection_threshold' => (int) env('ALERTS_CONNECTION_THRESHOLD', 80),
 
+    // Warn when an app with a daily message limit has used this percentage
+    // of it; over the limit is critical. Reverb doesn't enforce the limit.
+    'message_threshold' => (int) env('ALERTS_MESSAGE_THRESHOLD', 80),
+
     'metrics_stale_minutes' => (int) env('ALERTS_METRICS_STALE_MINUTES', 5),
 
     'remind_minutes' => (int) env('ALERTS_REMIND_MINUTES', 60),

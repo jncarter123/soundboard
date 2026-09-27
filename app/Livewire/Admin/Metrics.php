@@ -4,6 +4,7 @@ namespace App\Livewire\Admin;
 
 use App\Models\ReverbApp;
 use App\Services\ReverbApiService;
+use App\Support\MessageCounts;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +28,9 @@ class Metrics extends Component
     public array $detailData = [];
 
     public ?string $lastUpdated = null;
+
+    /** @var array<string, array{sent: int, received: int, total: int}> Today's (UTC) message counts, keyed by app_id. */
+    public array $messagesToday = [];
 
     /** Reverb servers sharing Redis (1 without scaling; null if unknown). */
     public ?int $servers = 1;
@@ -155,6 +159,7 @@ class Metrics extends Component
     {
         $this->liveData = app(ReverbApiService::class)->getAllAppsLiveStats();
         $this->servers = app(ReverbApiService::class)->getServerCount();
+        $this->messagesToday = MessageCounts::today();
         $this->loadMembers();
         $this->lastUpdated = now()->format('g:i:s A');
     }

@@ -5,8 +5,10 @@ namespace App\Alerts;
 use App\Models\Alert;
 use App\Models\ReverbApp;
 use App\Services\ReverbApiService;
+use App\Support\MessageCounts;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -36,11 +38,15 @@ class AlertConditions
             return array_values(array_filter([$skew]));
         }
 
+        // Message counts come from Pulse's tables, not Reverb's API, so they
+        // hold even when the checks below can't reach Reverb.
+        $messages = $this->messageConditions($apps);
+
         // Beyond Reverb's tolerance every signed request is refused, so the
         // polls below would fail and look like an outage. The skew is the
         // cause; report only that.
         if ($skew?->severity === Alert::CRITICAL) {
-            return [$skew];
+            return [$skew, ...$messages];
         }
 
         $counts = $this->api->getConnectionCounts($apps);
@@ -54,7 +60,7 @@ class AlertConditions
                 severity: Alert::CRITICAL,
                 message: "Reverb is unreachable at {$this->reverbTarget()}",
                 details: ['target' => $this->reverbTarget()],
-            )]));
+            ), ...$messages]));
         }
 
         // With scaling, each Reverb server enforces max_connections on its own
@@ -64,9 +70,67 @@ class AlertConditions
 
         return array_values(array_filter([
             ...$apps->map(fn (ReverbApp $app) => $this->connectionCondition($app, $counts[$app->app_id] ?? null, $servers))->all(),
+            ...$messages,
             $this->staleMetricsCondition($apps->min('created_at')),
             $skew,
         ]));
+    }
+
+    /**
+     * @param  Collection<int, ReverbApp>  $apps
+     * @return list<Condition>
+     */
+    protected function messageConditions(Collection $apps): array
+    {
+        $limited = $apps->filter(fn (ReverbApp $app) => $app->max_messages_per_day);
+
+        if ($limited->isEmpty()) {
+            return [];
+        }
+
+        $counts = MessageCounts::today();
+
+        return array_values(array_filter($limited->map(
+            fn (ReverbApp $app) => $this->messageCondition($app, $counts[$app->app_id]['total'] ?? 0),
+        )->all()));
+    }
+
+    /**
+     * The daily message limit is Soundboard's own: Reverb keeps delivering
+     * past it, so going over is reported, not enforced. Counts reset at
+     * midnight UTC, which resolves the alert.
+     */
+    protected function messageCondition(ReverbApp $app, int $messages): ?Condition
+    {
+        $limit = $app->max_messages_per_day;
+        $percent = (int) floor($messages / $limit * 100);
+        $threshold = (int) config('alerts.message_threshold', 80);
+        $details = ['messages' => $messages, 'limit' => $limit, 'percent' => $percent, 'threshold' => $threshold];
+        $limitText = number_format($messages).'/'.number_format($limit).' today, UTC';
+
+        if ($messages > $limit) {
+            return new Condition(
+                key: "messages:{$app->app_id}",
+                type: 'messages.over_limit',
+                severity: Alert::CRITICAL,
+                message: "{$app->name} is over its daily message limit ({$limitText})",
+                appId: $app->app_id,
+                details: $details,
+            );
+        }
+
+        if ($percent >= $threshold) {
+            return new Condition(
+                key: "messages:{$app->app_id}",
+                type: 'messages.near_limit',
+                severity: Alert::WARNING,
+                message: "{$app->name} has used {$percent}% of its daily message limit ({$limitText})",
+                appId: $app->app_id,
+                details: $details,
+            );
+        }
+
+        return null;
     }
 
     /**

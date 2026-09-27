@@ -81,8 +81,15 @@
                         <span class="text-sm font-normal text-gray-500 font-mono ml-2">{{ $app['app_id'] }}</span>
                     </h2>
 
+                    @php
+                        $appModel = \App\Models\ReverbApp::where('app_id', $app['app_id'])->first();
+                        $today = $messagesToday[$app['app_id']] ?? ['sent' => 0, 'received' => 0, 'total' => 0];
+                        $dailyLimit = $appModel?->max_messages_per_day;
+                        $dailyPercent = $dailyLimit ? (int) floor($today['total'] / $dailyLimit * 100) : null;
+                    @endphp
+
                     {{-- Stat Cards --}}
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                         {{-- Connections --}}
                         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                             <div class="flex items-center justify-between mb-1">
@@ -116,13 +123,31 @@
                         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                             <p class="text-sm font-medium text-gray-500 uppercase tracking-wider mb-1">Connection Limit</p>
                             <p class="mt-1 text-3xl font-semibold text-gray-900">
-                                @php
-                                    $appModel = \App\Models\ReverbApp::where('app_id', $app['app_id'])->first();
-                                @endphp
                                 {{ $appModel && $appModel->max_connections ? number_format($appModel->max_connections) : 'Unlimited' }}
                             </p>
                             @if($appModel && $appModel->max_connections && ($servers ?? 1) > 1)
                                 <p class="mt-1 text-xs text-gray-500">per server · {{ number_format($appModel->max_connections * $servers) }} across {{ $servers }} servers</p>
+                            @endif
+                        </div>
+
+                        {{-- Messages Today --}}
+                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <p class="text-sm font-medium text-gray-500 uppercase tracking-wider mb-1" title="Since midnight UTC. Sent counts each delivery to each client, so one broadcast to 100 subscribers is 100.">Messages Today</p>
+                            <p class="mt-1 text-3xl font-semibold text-gray-900">
+                                {{ number_format($today['total']) }}
+                                @if($dailyLimit)
+                                    <span class="text-base font-normal text-gray-500">/ {{ number_format($dailyLimit) }}</span>
+                                @endif
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">{{ number_format($today['sent']) }} sent · {{ number_format($today['received']) }} received</p>
+                            @if($dailyLimit)
+                                @php($overThreshold = $dailyPercent >= config('alerts.message_threshold', 80))
+                                <div class="mt-2 h-1.5 rounded-full bg-gray-100 overflow-hidden" role="progressbar" aria-valuenow="{{ $dailyPercent }}" aria-valuemin="0" aria-valuemax="100" aria-label="Daily message limit used">
+                                    <div class="h-full rounded-full {{ $today['total'] > $dailyLimit ? 'bg-red-500' : ($overThreshold ? 'bg-amber-500' : 'bg-blue-500') }}" style="width: {{ min(100, $dailyPercent) }}%"></div>
+                                </div>
+                                <p class="mt-1 text-xs {{ $today['total'] > $dailyLimit ? 'text-red-700 font-medium' : 'text-gray-500' }}">
+                                    {{ $today['total'] > $dailyLimit ? 'Over the daily limit' : $dailyPercent.'% of daily limit' }}
+                                </p>
                             @endif
                         </div>
                     </div>
