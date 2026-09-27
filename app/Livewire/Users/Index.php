@@ -154,7 +154,7 @@ class Index extends Component
      */
     private function authorizeManageUser(User $user): void
     {
-        if (! auth()->user()->holdsAllPermissions($user->reachablePermissions())) {
+        if (! auth()->user()->mayActAs($user)) {
             throw new AuthorizationException('You cannot manage a user with permissions you do not hold.');
         }
     }

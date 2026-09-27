@@ -48,6 +48,10 @@ class Index extends Component
 
     public function updatedSelectedUserId(): void
     {
+        if ($this->selectedUserId === null) {
+            return;
+        }
+
         $this->authorizeUserSelection($this->selectedUserId);
     }
 
@@ -110,15 +114,22 @@ class Index extends Component
         }
     }
 
+    /**
+     * A token acts as its owner, so managing another user's tokens also
+     * requires being allowed to act as them; otherwise tokens.manage could
+     * mint a token for a Super Admin.
+     */
     private function authorizeUserSelection(?int $userId): void
     {
         $authUser = auth()->user();
 
-        if ($authUser->can('tokens.manage')) {
+        if ($userId === $authUser->id && $authUser->canAny(['tokens.manage', 'tokens.manage-own'])) {
             return;
         }
 
-        if ($authUser->can('tokens.manage-own') && $userId === $authUser->id) {
+        $user = $userId === null ? null : User::find($userId);
+
+        if ($user && $authUser->can('tokens.manage') && $authUser->mayActAs($user)) {
             return;
         }
 
@@ -130,19 +141,22 @@ class Index extends Component
         $canManageAll = auth()->user()->can('tokens.manage');
 
         $users = $canManageAll
-            ? User::orderBy('name')->get(['id', 'name', 'email'])
+            ? User::with(['roles.permissions', 'permissions', 'teams'])->orderBy('name')->get()
+                ->filter(fn (User $user) => $user->is(auth()->user()) || auth()->user()->mayActAs($user))
+                ->values()
             : collect([auth()->user()]);
 
-        $tokens = $this->selectedUserId
-            ? PersonalAccessToken::where('tokenable_id', $this->selectedUserId)
+        // Only users listed above: those whose tokens this user may manage.
+        $selectedUser = $this->selectedUserId
+            ? $users->firstWhere('id', $this->selectedUserId)
+            : null;
+
+        $tokens = $selectedUser
+            ? PersonalAccessToken::where('tokenable_id', $selectedUser->id)
                 ->where('tokenable_type', User::class)
                 ->orderByDesc('created_at')
                 ->get()
             : collect();
-
-        $selectedUser = $this->selectedUserId
-            ? $users->firstWhere('id', $this->selectedUserId)
-            : null;
 
         return view('livewire.tokens.index', compact('users', 'tokens', 'selectedUser', 'canManageAll'))
             ->layout('components.layouts.app');

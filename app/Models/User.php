@@ -76,6 +76,22 @@ class User extends Authenticatable
     }
 
     /**
+     * Whether this user may act as the given one: edit their sign-in details,
+     * delete them, or hold API tokens that act as them. Only for users with
+     * no more access than this one, counting team roles. Super Admin passes
+     * checks beyond its assigned permissions, so only a Super Admin may act
+     * as another.
+     */
+    public function mayActAs(User $user): bool
+    {
+        if ($user->hasRole(Role::SUPER_ADMIN)) {
+            return $this->hasRole(Role::SUPER_ADMIN);
+        }
+
+        return $this->holdsAllPermissions($user->reachablePermissions());
+    }
+
+    /**
      * Name and email changes are audited; password changes are logged as their
      * own event, never with the hash.
      */

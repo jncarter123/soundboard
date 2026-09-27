@@ -235,7 +235,7 @@ Each app must list at least one allowed origin. Reverb matches the browser's hos
 
 ## API
 
-Apps can be managed over HTTP with a personal access token created on the **Tokens** page. Requests act as the token's owner and use the same permissions and [team roles](#teams) as the dashboard. The permission column below is the global permission; team members get the same access on their teams' apps through their team role, and apps outside their teams return 404.
+Apps can be managed over HTTP with a personal access token created on the **Tokens** page. With `tokens.manage-own` you manage your own tokens; `tokens.manage` also covers other users' tokens, but only for users with no more access than you (counting team roles), and only a Super Admin can manage another Super Admin's. Requests act as the token's owner and use the same permissions and [team roles](#teams) as the dashboard. The permission column below is the global permission; team members get the same access on their teams' apps through their team role, and apps outside their teams return 404.
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" https://soundboard.example.com/api/apps
