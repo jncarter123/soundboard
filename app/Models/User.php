@@ -3,10 +3,12 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\TeamRole;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\DB;
@@ -35,6 +37,42 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function teams(): BelongsToMany
+    {
+        return $this->belongsToMany(Team::class)->withPivot('role')->withTimestamps();
+    }
+
+    /**
+     * This user's role in the given team, or null if they aren't a member.
+     * Reads the loaded `teams` relation, so memberships are queried once.
+     */
+    public function teamRole(?int $teamId): ?TeamRole
+    {
+        if ($teamId === null) {
+            return null;
+        }
+
+        $role = $this->teams->firstWhere('id', $teamId)?->pivot->role;
+
+        return $role === null ? null : TeamRole::tryFrom($role);
+    }
+
+    /**
+     * Every permission this user has anywhere: from their roles, plus what
+     * their team roles give on their teams' apps. Controlling their account
+     * means controlling all of it.
+     *
+     * @return list<string>
+     */
+    public function reachablePermissions(): array
+    {
+        return $this->getAllPermissions()->pluck('name')
+            ->merge($this->teams->flatMap(fn (Team $team) => TeamRole::tryFrom($team->pivot->role)?->permissions() ?? []))
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**

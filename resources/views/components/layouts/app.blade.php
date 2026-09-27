@@ -19,8 +19,9 @@
                     Dashboard
                 </a>
                 {{-- Admin submenu --}}
-                @if (auth()->user()->canAny(['users.read', 'roles.read', 'tokens.manage', 'tokens.manage-own', 'apps.read']))
-                    @php $adminActive = request()->routeIs('admin.users', 'admin.roles', 'admin.tokens', 'admin.apps'); @endphp
+                @php $canApps = auth()->user()->can('viewAny', \App\Models\ReverbApp::class); @endphp
+                @if ($canApps || auth()->user()->canAny(['users.read', 'roles.read', 'teams.read', 'tokens.manage', 'tokens.manage-own']))
+                    @php $adminActive = request()->routeIs('admin.users', 'admin.roles', 'admin.teams', 'admin.tokens', 'admin.apps'); @endphp
                     <div x-data="{ open: false }" class="relative" @click.outside="open = false">
                         <button @click="open = !open"
                                 class="flex items-center gap-1 text-sm font-medium {{ $adminActive ? 'text-blue-600 border-b-2 border-blue-600 pb-0.5' : 'text-gray-600 hover:text-gray-900' }}">
@@ -43,22 +44,28 @@
                                     Roles
                                 </a>
                             @endcan
+                            @can('teams.read')
+                                <a href="{{ route('admin.teams') }}"
+                                   class="block px-4 py-2 text-sm {{ request()->routeIs('admin.teams') ? 'text-blue-600 bg-blue-50 font-medium' : 'text-gray-700 hover:bg-gray-50' }}">
+                                    Teams
+                                </a>
+                            @endcan
                             @if (auth()->user()->canAny(['tokens.manage', 'tokens.manage-own']))
                                 <a href="{{ route('admin.tokens') }}"
                                    class="block px-4 py-2 text-sm {{ request()->routeIs('admin.tokens') ? 'text-blue-600 bg-blue-50 font-medium' : 'text-gray-700 hover:bg-gray-50' }}">
                                     API Tokens
                                 </a>
                             @endif
-                            @can('apps.read')
+                            @if ($canApps)
                                 <a href="{{ route('admin.apps') }}"
                                    class="block px-4 py-2 text-sm {{ request()->routeIs('admin.apps') ? 'text-blue-600 bg-blue-50 font-medium' : 'text-gray-700 hover:bg-gray-50' }}">
                                     Applications
                                 </a>
-                            @endcan
+                            @endif
                         </div>
                     </div>
                 @endif
-                @can('metrics.read')
+                @can('viewAnyMetrics', \App\Models\ReverbApp::class)
                 <a href="{{ route('admin.metrics') }}"
                    class="text-sm font-medium {{ request()->routeIs('admin.metrics') ? 'text-blue-600 border-b-2 border-blue-600 pb-0.5' : 'text-gray-600 hover:text-gray-900' }}">
                     Metrics

@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\Role;
+use App\Models\User;
 use App\Support\Audit;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
@@ -12,6 +14,7 @@ use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -35,6 +38,10 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureProxies();
         $this->configureAuditing();
+
+        // Super Admin controls the whole server, including permissions added
+        // after the role was last synced.
+        Gate::before(fn (User $user) => $user->hasRole(Role::SUPER_ADMIN) ? true : null);
 
         RateLimiter::for('api', fn (Request $request) => Limit::perMinute(60)->by($request->user()?->id ?: $request->ip()));
 

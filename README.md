@@ -14,10 +14,11 @@ Reverb normally reads its applications from `config/reverb.php`, so adding an ap
 - **Live metrics**: current connections, channels, subscriber counts, and messages today for each app, plus the members of each presence channel.
 - **Historical metrics**: connection and message trends over 1 hour to 7 days, recorded with Laravel Pulse.
 - **System status**: database, Redis, and Reverb health at a glance, plus a `/api/health` endpoint for load balancers.
-- **Role-based access control**: fine-grained permissions for apps, users, roles, tokens, metrics, and status. Users can never grant access they don't hold themselves.
+- **Role-based access control**: fine-grained permissions for apps, users, roles, teams, tokens, metrics, and status. Users can never grant access they don't hold themselves.
+- **Teams**: give a team its own apps, so its members see and manage only those.
 - **API**: manage apps and rotate credentials from scripts and CI with personal access tokens.
 - **Alerts** by email and signed webhook when an app nears or hits its connection limit, Reverb goes down, or metrics stop recording.
-- **Audit log**: who signed in, viewed or regenerated credentials, and changed apps, users, roles, or tokens, with the source and IP of each action.
+- **Audit log**: who signed in, viewed or regenerated credentials, and changed apps, users, roles, teams, or tokens, with the source and IP of each action.
 - **Secure by default**: app secrets are encrypted at rest, credentials are only visible to users who can edit the app, and login is rate limited.
 
 ## Screenshots
@@ -45,7 +46,7 @@ composer create-project jncarter123/soundboard soundboard   # installs, creates 
 cd soundboard
 
 npm install && npm run build   # build the dashboard's assets
-php artisan soundboard:add-user --role=Admin   # your admin account; prompts for name, email, password
+php artisan soundboard:add-user --role="Super Admin"   # your admin account; prompts for name, email, password
 
 php artisan serve              # the dashboard
 php artisan reverb:start       # the WebSocket server
@@ -72,7 +73,7 @@ curl -fsSL -o docker.env https://raw.githubusercontent.com/jncarter123/soundboar
 echo "SOUNDBOARD_IMAGE=jncarter/soundboard:1" > .env   # pull instead of build
 
 docker compose up -d
-docker compose exec app php artisan soundboard:add-user --role=Admin   # your admin account
+docker compose exec app php artisan soundboard:add-user --role="Super Admin"   # your admin account
 ```
 
 The dashboard is on `127.0.0.1:8000` and Reverb on `127.0.0.1:8080`, both plain HTTP on loopback only, for a reverse proxy in front to terminate TLS. Set `APP_URL` in `docker.env` to the dashboard's public URL, scheme included (`https://soundboard.example.com`), or the browser blocks its assets as mixed content.
@@ -176,13 +177,31 @@ Give an app a **Daily Message Limit** to be alerted when it sends and receives m
 
 The count is messages sent plus received since midnight UTC, as Reverb's Pulse recorder counts them. Sent counts each delivery to each client, so one broadcast to 1,000 subscribers is 1,000 messages, and includes Reverb's own protocol messages such as replies to pings. It reaches Soundboard every 15 seconds or so.
 
+## Teams
+
+Roles grant access to every app on the server. To give a group access to only some apps, create a team on the **Teams** page (the `teams.read` and `teams.manage` permissions) and assign apps to it on the **Applications** page. Members see only their teams' apps, with access set by their team role:
+
+| Team role | On the team's apps |
+|---|---|
+| Viewer | See the apps and their metrics |
+| Maintainer | Also create and edit apps, and view or regenerate credentials |
+| Owner | Also delete apps |
+
+Each team role mirrors global permissions on the team's apps only: Viewer is `apps.read` and `metrics.read`, Maintainer adds `apps.create` and `apps.update`, Owner adds `apps.delete`. As with roles, you can only assign or remove a team role if you hold all of those permissions yourself.
+
+An app belongs to at most one team. Apps with no team are visible only to users whose roles grant app permissions. Moving an app to another team, or out of one, takes the global `apps.update` permission. A user can belong to any number of teams.
+
+**Super Admin** controls the whole server and passes every permission check. Server-wide pages (Users, Roles, Teams, Status, and the Audit Log) stay behind their own permissions; team membership never grants them.
+
+All apps share one Reverb server and its limits, so teams separate access, not capacity: a busy app on one team still uses the same server as everyone else's.
+
 ## Audit log
 
-The **Audit Log** page (the `audit.read` permission, which Admin has) records who did what, when, and from where:
+The **Audit Log** page (the `audit.read` permission, which Super Admin has) records who did what, when, and from where:
 
 - Sign-ins, failed sign-ins, and sign-outs
 - Viewing and regenerating app credentials, from the dashboard or the API
-- Changes to apps, users, roles, role permissions, and user roles, with old and new values
+- Changes to apps, users, roles, role permissions, user roles, teams, and team members, with old and new values
 - Password changes and resets, and API tokens created or revoked
 
 App keys, secrets, and passwords are never recorded. Entries can't be edited or deleted from the dashboard; entries older than `ACTIVITYLOG_CLEAN_AFTER_DAYS` (365 by default) are removed daily by the scheduler.
@@ -216,7 +235,7 @@ Each app must list at least one allowed origin. Reverb matches the browser's hos
 
 ## API
 
-Apps can be managed over HTTP with a personal access token created on the **Tokens** page. Requests act as the token's owner and use the same permissions as the dashboard.
+Apps can be managed over HTTP with a personal access token created on the **Tokens** page. Requests act as the token's owner and use the same permissions and [team roles](#teams) as the dashboard. The permission column below is the global permission; team members get the same access on their teams' apps through their team role, and apps outside their teams return 404.
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" https://soundboard.example.com/api/apps
@@ -225,9 +244,9 @@ curl -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" https://sou
 | Method | Path | Permission | Notes |
 |---|---|---|---|
 | `GET` | `/api/apps` | `apps.read` | Paginated; no credentials |
-| `POST` | `/api/apps` | `apps.create` | Requires `name`, `app_id`, `allowed_origins`; returns credentials |
+| `POST` | `/api/apps` | `apps.create` | Requires `name`, `app_id`, `allowed_origins`; returns credentials. Team members must pass a `team_id` |
 | `GET` | `/api/apps/{app_id}` | `apps.read` | |
-| `PATCH` | `/api/apps/{app_id}` | `apps.update` | `app_id` can't be changed |
+| `PATCH` | `/api/apps/{app_id}` | `apps.update` | `app_id` can't be changed; changing `team_id` needs the global permission |
 | `DELETE` | `/api/apps/{app_id}` | `apps.delete` | |
 | `GET` | `/api/apps/{app_id}/credentials` | `apps.update` | Key and secret |
 | `POST` | `/api/apps/{app_id}/credentials` | `apps.update` | Regenerates key and secret |
@@ -235,7 +254,7 @@ curl -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" https://sou
 
 Requests are limited to 60 per minute per user.
 
-Besides `name` and `allowed_origins`, create and update accept Reverb's per-app options: `ping_interval`, `activity_timeout`, `max_message_size`, `max_connections`, `accept_client_events_from` (`members`, `all`, or `none`), and `rate_limiting`, which takes the same shape as Reverb's own config. They also accept `max_messages_per_day`, Soundboard's own [daily message limit](#daily-message-limits) (`null` for none):
+Besides `name` and `allowed_origins`, create and update accept Reverb's per-app options: `ping_interval`, `activity_timeout`, `max_message_size`, `max_connections`, `accept_client_events_from` (`members`, `all`, or `none`), and `rate_limiting`, which takes the same shape as Reverb's own config. They also accept `max_messages_per_day`, Soundboard's own [daily message limit](#daily-message-limits) (`null` for none), and `team_id`, the app's [team](#teams) (`null` for none):
 
 ```json
 { "rate_limiting": { "enabled": true, "max_attempts": 60, "decay_seconds": 60, "terminate_on_limit": false } }

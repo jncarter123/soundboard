@@ -25,7 +25,7 @@ class AdminUserSeeder extends Seeder
             ]);
         }
 
-        $adminRole = Role::firstOrCreate(['name' => Role::ADMIN, 'guard_name' => $guard]);
+        $adminRole = Role::firstOrCreate(['name' => Role::SUPER_ADMIN, 'guard_name' => $guard]);
         $adminRole->syncPermissions(
             Permission::where('guard_name', $guard)->pluck('name')->all()
         );

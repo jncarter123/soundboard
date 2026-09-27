@@ -134,7 +134,7 @@ class SecurityHardeningTest extends TestCase
     {
         $manager = $this->userWithPermissions(['users.read', 'users.update']);
         $target = User::factory()->create();
-        $adminRole = Role::findByName(Role::ADMIN);
+        $adminRole = Role::findByName(Role::SUPER_ADMIN);
 
         Livewire::actingAs($manager)
             ->test(UsersIndex::class)
@@ -143,7 +143,7 @@ class SecurityHardeningTest extends TestCase
             ->call('saveEdit')
             ->assertHasErrors(['selectedRoles']);
 
-        $this->assertFalse($target->fresh()->hasRole(Role::ADMIN));
+        $this->assertFalse($target->fresh()->hasRole(Role::SUPER_ADMIN));
     }
 
     public function test_user_cannot_change_own_roles(): void
@@ -157,7 +157,7 @@ class SecurityHardeningTest extends TestCase
             ->call('saveEdit')
             ->assertHasErrors(['selectedRoles']);
 
-        $this->assertTrue($admin->fresh()->hasRole(Role::ADMIN));
+        $this->assertTrue($admin->fresh()->hasRole(Role::SUPER_ADMIN));
     }
 
     public function test_user_manager_cannot_edit_more_privileged_user(): void
@@ -277,7 +277,7 @@ class SecurityHardeningTest extends TestCase
 
     public function test_admin_role_cannot_be_edited_or_deleted(): void
     {
-        $adminRole = Role::findByName(Role::ADMIN);
+        $adminRole = Role::findByName(Role::SUPER_ADMIN);
 
         Livewire::actingAs($this->admin())
             ->test(RolesIndex::class)
@@ -289,7 +289,7 @@ class SecurityHardeningTest extends TestCase
             ->call('editRole', $adminRole->id)
             ->assertForbidden();
 
-        $this->assertNotNull(Role::where('name', Role::ADMIN)->first());
+        $this->assertNotNull(Role::where('name', Role::SUPER_ADMIN)->first());
     }
 
     // --- App form ---------------------------------------------------------

@@ -4,6 +4,7 @@ namespace App\Livewire\Audit;
 
 use App\Models\ReverbApp;
 use App\Models\Role;
+use App\Models\Team;
 use App\Models\User;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -28,6 +29,11 @@ class Index extends Component
             'account.password_changed' => 'Changed own password',
             'user.password_changed' => "Changed another user's password",
             'user.password_reset' => 'Reset password (CLI)',
+        ],
+        'Teams' => [
+            'team.member_added' => 'Added team member',
+            'team.member_role_changed' => 'Changed team member role',
+            'team.member_removed' => 'Removed team member',
         ],
         'API tokens' => ['token.created' => 'Created token', 'token.revoked' => 'Revoked token'],
         'Records' => ['created' => 'Created', 'updated' => 'Updated', 'deleted' => 'Deleted'],
@@ -58,6 +64,7 @@ class Index extends Component
             $subject instanceof ReverbApp => "{$subject->name} ({$subject->app_id})",
             $subject instanceof User => "{$subject->name} <{$subject->email}>",
             $subject instanceof Role => "Role {$subject->name}",
+            $subject instanceof Team => "Team {$subject->name}",
             // Deleted since: the entry outlives the record.
             default => class_basename($entry->subject_type)." #{$entry->subject_id} (deleted)",
         };
@@ -84,7 +91,7 @@ class Index extends Component
                     ->where('description', 'like', $term)
                     ->orWhere('properties', 'like', $term)
                     ->orWhereHasMorph('causer', [User::class], fn ($q) => $q->where('name', 'like', $term)->orWhere('email', 'like', $term))
-                    ->orWhereHasMorph('subject', [ReverbApp::class, User::class, Role::class], fn ($q) => $q->where('name', 'like', $term)));
+                    ->orWhereHasMorph('subject', [ReverbApp::class, User::class, Role::class, Team::class], fn ($q) => $q->where('name', 'like', $term)));
             })
             ->latest('id')
             ->paginate(50);

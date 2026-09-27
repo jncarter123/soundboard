@@ -7,6 +7,7 @@ use App\Services\ReverbApiService;
 use App\Support\MessageCounts;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Laravel\Pulse\Facades\Pulse;
 use Livewire\Attributes\Url;
@@ -132,7 +133,7 @@ class Metrics extends Component
         }
 
         [$appId, $channel] = $this->membersOf;
-        $app = ReverbApp::where('app_id', $appId)->first();
+        $app = $this->visibleApps()->where('app_id', $appId)->first();
         $stillListed = array_key_exists($channel, (array) (collect($this->liveData)->firstWhere('app_id', $appId)['channels'] ?? []));
 
         // The channel emptied (Reverb drops empty channels) or the app went away.
@@ -157,9 +158,10 @@ class Metrics extends Component
 
     protected function loadLiveData(): void
     {
-        $this->liveData = app(ReverbApiService::class)->getAllAppsLiveStats();
+        $apps = $this->visibleApps()->get();
+        $this->liveData = app(ReverbApiService::class)->getAllAppsLiveStats($apps);
         $this->servers = app(ReverbApiService::class)->getServerCount();
-        $this->messagesToday = MessageCounts::today();
+        $this->messagesToday = array_intersect_key(MessageCounts::today(), $apps->keyBy('app_id')->all());
         $this->loadMembers();
         $this->lastUpdated = now()->format('g:i:s A');
     }
@@ -187,7 +189,7 @@ class Metrics extends Component
             ->groupBy('key', 'type')
             ->get();
 
-        $apps = ReverbApp::all();
+        $apps = $this->visibleApps()->get();
 
         $this->historicalData = $apps->map(function ($app) use ($connections, $messageCounts) {
             $appConnections = $connections->firstWhere('key', $app->app_id);
@@ -209,7 +211,7 @@ class Metrics extends Component
 
     protected function loadAppDetail(): void
     {
-        $app = ReverbApp::where('app_id', $this->selectedApp)->first();
+        $app = $this->visibleApps()->where('app_id', $this->selectedApp)->first();
 
         if ($app === null) {
             $this->clearSelection();
@@ -250,6 +252,16 @@ class Metrics extends Component
         ];
 
         $this->lastUpdated = now()->format('g:i:s A');
+    }
+
+    /**
+     * Every app for users with metrics.read, otherwise their teams' apps.
+     *
+     * @return Builder<ReverbApp>
+     */
+    protected function visibleApps(): Builder
+    {
+        return ReverbApp::visibleTo(auth()->user(), 'metrics.read');
     }
 
     /**

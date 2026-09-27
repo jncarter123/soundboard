@@ -52,13 +52,14 @@ class ReverbApiService
     }
 
     /**
-     * Connection counts and channels for every app.
+     * Connection counts and channels for the given apps, or every app.
      *
+     * @param  Collection<int, ReverbApp>|null  $apps
      * @return list<array{app_id: string, name: string, connections: int|null, channels: array<string, array>|null}>
      */
-    public function getAllAppsLiveStats(): array
+    public function getAllAppsLiveStats(?Collection $apps = null): array
     {
-        $apps = ReverbApp::all();
+        $apps ??= ReverbApp::all();
 
         // Both endpoints for every app go out in one concurrent batch.
         $results = $this->getMany($apps, [
