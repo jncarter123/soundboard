@@ -52,7 +52,7 @@
                             </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
-                            @php($canManage = auth()->user()->holdsAllPermissions($user->getAllPermissions()))
+                            @php($canManage = auth()->user()->mayActAs($user))
                             <div class="flex items-center justify-end gap-2">
                                 @can('users.update')
                                 @if ($canManage)
