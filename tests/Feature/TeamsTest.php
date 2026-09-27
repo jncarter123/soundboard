@@ -306,10 +306,133 @@ class TeamsTest extends TestCase
 
     // --- Managing teams --------------------------------------------------
 
-    public function test_teams_page_requires_teams_read(): void
+    public function test_teams_page_requires_teams_read_or_owning_a_team(): void
     {
-        $this->actingAs($this->member($this->payments, TeamRole::Owner))->get('/admin/teams')->assertForbidden();
+        $this->actingAs($this->member($this->payments, TeamRole::Maintainer))->get('/admin/teams')->assertForbidden();
+        $this->actingAs($this->member($this->payments, TeamRole::Owner))->get('/admin/teams')->assertOk();
         $this->actingAs($this->userWithPermissions(['teams.read']))->get('/admin/teams')->assertOk();
+    }
+
+    // --- Owners managing members -----------------------------------------
+
+    public function test_owners_see_only_the_teams_they_own(): void
+    {
+        $owner = $this->member($this->payments, TeamRole::Owner);
+        $this->search->members()->attach($owner, ['role' => TeamRole::Viewer->value]);
+
+        Livewire::actingAs($owner)->test(TeamsIndex::class)
+            ->assertSee('Payments')
+            ->assertDontSee('Search')
+            ->assertDontSee('New Team')
+            ->call('showMembers', $this->search->id)
+            ->assertForbidden();
+    }
+
+    public function test_owners_manage_their_teams_members_without_global_permissions(): void
+    {
+        $owner = $this->member($this->payments, TeamRole::Owner);
+        $user = User::factory()->create();
+
+        $component = Livewire::actingAs($owner)->test(TeamsIndex::class)
+            ->call('showMembers', $this->payments->id)
+            ->set('newMemberEmail', $user->email)
+            ->set('newMemberRole', 'owner')
+            ->call('addMember')
+            ->assertHasNoErrors();
+        $this->assertSame(TeamRole::Owner, $user->fresh()->teamRole($this->payments->id));
+
+        $component->call('changeMemberRole', $user->id, 'viewer')->assertHasNoErrors();
+        $this->assertSame(TeamRole::Viewer, $user->fresh()->teamRole($this->payments->id));
+
+        $component->call('removeMember', $user->id)->assertHasNoErrors();
+        $this->assertNull($user->fresh()->teamRole($this->payments->id));
+    }
+
+    public function test_owners_cannot_rename_delete_or_create_teams(): void
+    {
+        $owner = $this->member($this->payments, TeamRole::Owner);
+
+        foreach ([['newTeam'], ['editTeam', $this->payments->id], ['deleteTeam', $this->payments->id]] as $call) {
+            Livewire::actingAs($owner)->test(TeamsIndex::class)->call(...$call)->assertForbidden();
+        }
+    }
+
+    public function test_an_owner_demoted_mid_session_loses_member_management(): void
+    {
+        $owner = $this->member($this->payments, TeamRole::Owner);
+        $this->member($this->payments, TeamRole::Owner);
+        $viewer = $this->member($this->payments, TeamRole::Viewer);
+
+        $component = Livewire::actingAs($owner)->test(TeamsIndex::class)->call('showMembers', $this->payments->id);
+
+        // Demoted by someone else while the members window is still open.
+        $this->payments->members()->updateExistingPivot($owner->id, ['role' => TeamRole::Viewer->value]);
+        $owner->unsetRelation('teams');
+
+        $component->call('removeMember', $viewer->id)->assertForbidden();
+        $this->assertSame(TeamRole::Viewer, $viewer->fresh()->teamRole($this->payments->id));
+    }
+
+    public function test_maintainers_cannot_manage_members(): void
+    {
+        $maintainer = $this->member($this->payments, TeamRole::Maintainer);
+        $viewer = $this->member($this->payments, TeamRole::Viewer);
+
+        $this->actingAs($maintainer)->get('/admin/teams')->assertForbidden();
+
+        Livewire::actingAs($maintainer)->test(TeamsIndex::class)
+            ->call('showMembers', $this->payments->id)
+            ->assertForbidden();
+
+        $this->assertSame(TeamRole::Viewer, $viewer->fresh()->teamRole($this->payments->id));
+    }
+
+    public function test_the_last_owner_stays_unless_a_team_manager_removes_them(): void
+    {
+        $owner = $this->member($this->payments, TeamRole::Owner);
+
+        $component = Livewire::actingAs($owner)->test(TeamsIndex::class)->call('showMembers', $this->payments->id);
+        $component->call('changeMemberRole', $owner->id, 'maintainer')->assertHasErrors('membership');
+        $component->call('removeMember', $owner->id)->assertHasErrors('membership');
+        $this->assertSame(TeamRole::Owner, $owner->fresh()->teamRole($this->payments->id));
+
+        // With a second owner, the first can step down.
+        $second = $this->member($this->payments, TeamRole::Owner);
+        Livewire::actingAs($owner->fresh())->test(TeamsIndex::class)
+            ->call('showMembers', $this->payments->id)
+            ->call('removeMember', $owner->id)
+            ->assertHasNoErrors();
+        $this->assertNull($owner->fresh()->teamRole($this->payments->id));
+
+        Livewire::actingAs($this->admin())->test(TeamsIndex::class)
+            ->call('showMembers', $this->payments->id)
+            ->call('removeMember', $second->id)
+            ->assertHasNoErrors();
+        $this->assertSame(0, $this->payments->members()->count());
+    }
+
+    public function test_adding_by_email_reports_unknown_users_and_existing_members(): void
+    {
+        $owner = $this->member($this->payments, TeamRole::Owner);
+
+        Livewire::actingAs($owner)->test(TeamsIndex::class)
+            ->call('showMembers', $this->payments->id)
+            ->set('newMemberEmail', 'nobody@example.com')
+            ->call('addMember')
+            ->assertHasErrors(['newMemberEmail' => 'exists'])
+            ->set('newMemberEmail', $owner->email)
+            ->call('addMember')
+            ->assertHasErrors('newMemberEmail');
+    }
+
+    public function test_owners_do_not_see_the_user_directory(): void
+    {
+        $owner = $this->member($this->payments, TeamRole::Owner);
+        $stranger = User::factory()->create();
+
+        Livewire::actingAs($owner)->test(TeamsIndex::class)
+            ->call('showMembers', $this->payments->id)
+            ->assertDontSee($stranger->email);
     }
 
     public function test_super_admin_creates_a_team_and_adds_members(): void
@@ -325,7 +448,7 @@ class TeamsTest extends TestCase
         $team = Team::where('name', 'Chat')->firstOrFail();
 
         $component->call('showMembers', $team->id)
-            ->set('newMemberId', (string) $user->id)
+            ->set('newMemberEmail', $user->email)
             ->set('newMemberRole', 'maintainer')
             ->call('addMember')
             ->assertHasNoErrors();
@@ -352,16 +475,16 @@ class TeamsTest extends TestCase
 
         $component = Livewire::actingAs($manager)->test(TeamsIndex::class)
             ->call('showMembers', $this->payments->id)
-            ->set('newMemberId', (string) $user->id)
+            ->set('newMemberEmail', $user->email)
             ->set('newMemberRole', 'owner')
             ->call('addMember')
             ->assertHasErrors('newMemberRole');
         $this->assertNull($user->fresh()->teamRole($this->payments->id));
 
         // Adding themselves doesn't work either.
-        $component->set('newMemberId', (string) $manager->id)->set('newMemberRole', 'maintainer')->call('addMember')->assertHasErrors('newMemberRole');
+        $component->set('newMemberEmail', $manager->email)->set('newMemberRole', 'maintainer')->call('addMember')->assertHasErrors('newMemberRole');
 
-        $component->set('newMemberId', (string) $user->id)->set('newMemberRole', 'viewer')->call('addMember')->assertHasNoErrors();
+        $component->set('newMemberEmail', $user->email)->set('newMemberRole', 'viewer')->call('addMember')->assertHasNoErrors();
         $component->call('changeMemberRole', $user->id, 'owner')->assertHasErrors('membership');
         $this->assertSame(TeamRole::Viewer, $user->fresh()->teamRole($this->payments->id));
 

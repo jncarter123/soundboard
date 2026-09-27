@@ -31,7 +31,7 @@ Route::middleware('auth')->prefix('admin')->group(function () {
     Route::get('/', Home::class)->name('admin.home');
     Route::get('/users', UsersIndex::class)->name('admin.users')->middleware('can:users.read');
     Route::get('/roles', RolesIndex::class)->name('admin.roles')->middleware('can:roles.read');
-    Route::get('/teams', TeamsIndex::class)->name('admin.teams')->middleware('can:teams.read');
+    Route::get('/teams', TeamsIndex::class)->name('admin.teams')->middleware('can:viewAny,App\Models\Team');
     Route::get('/tokens', TokensIndex::class)->name('admin.tokens');
     Route::get('/apps', AppsIndex::class)->name('admin.apps')->middleware('can:viewAny,App\Models\ReverbApp');
     Route::get('/metrics', Metrics::class)->name('admin.metrics')->middleware('can:viewAnyMetrics,App\Models\ReverbApp');

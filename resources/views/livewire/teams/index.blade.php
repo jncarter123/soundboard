@@ -3,7 +3,7 @@
     <div class="mb-4 flex items-center justify-between">
         <div>
             <h1 class="text-2xl font-bold text-gray-900">Teams</h1>
-            <p class="mt-1 text-sm text-gray-500">Members see and manage only their team's apps, according to their team role.</p>
+            <p class="mt-1 text-sm text-gray-500">Members see and manage only their team's apps, according to their team role. Owners manage their team's members.</p>
         </div>
         @can('teams.manage')
         <button
@@ -139,7 +139,7 @@
                                 <p class="text-xs text-gray-500 truncate">{{ $member->email }}</p>
                             </div>
                             <div class="flex items-center gap-2 shrink-0">
-                                @can('teams.manage')
+                                @can('manageMembers', $membersTeam)
                                     <select
                                         wire:change="changeMemberRole({{ $member->id }}, $event.target.value)"
                                         class="rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
@@ -167,19 +167,17 @@
                     @endforelse
                 </div>
 
-                @can('teams.manage')
+                @can('manageMembers', $membersTeam)
                     <div class="mt-4 flex items-start gap-2">
                         <div class="flex-1">
-                            <select
-                                wire:model="newMemberId"
-                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none @error('newMemberId') border-red-400 @enderror"
+                            <input
+                                wire:model="newMemberEmail"
+                                wire:keydown.enter="addMember"
+                                type="email"
+                                placeholder="Email of the user to add"
+                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none @error('newMemberEmail') border-red-400 @enderror"
                             >
-                                <option value="">Add a user…</option>
-                                @foreach ($candidates as $candidate)
-                                    <option value="{{ $candidate->id }}">{{ $candidate->name }} ({{ $candidate->email }})</option>
-                                @endforeach
-                            </select>
-                            @error('newMemberId') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                            @error('newMemberEmail') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
                         </div>
                         <div>
                             <select

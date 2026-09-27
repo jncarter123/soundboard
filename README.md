@@ -187,7 +187,9 @@ Roles grant access to every app on the server. To give a group access to only so
 | Maintainer | Also create and edit apps, and view or regenerate credentials |
 | Owner | Also delete apps |
 
-Each team role mirrors global permissions on the team's apps only: Viewer is `apps.read` and `metrics.read`, Maintainer adds `apps.create` and `apps.update`, Owner adds `apps.delete`. As with roles, you can only assign or remove a team role if you hold all of those permissions yourself.
+Each team role mirrors global permissions on the team's apps only: Viewer is `apps.read` and `metrics.read`, Maintainer adds `apps.create` and `apps.update`, Owner adds `apps.delete`.
+
+Owners also manage their team's members on the **Teams** page: they add users by email, change roles (up to Owner), and remove members, without any global permission. A team always keeps at least one owner unless someone with `teams.manage` removes the last one. Creating, renaming, and deleting teams takes `teams.manage`, and with it, as with roles, you can only assign or remove a team role if you hold all of its permissions yourself.
 
 An app belongs to at most one team. Apps with no team are visible only to users whose roles grant app permissions. Moving an app to another team, or out of one, takes the global `apps.update` permission. A user can belong to any number of teams.
 
