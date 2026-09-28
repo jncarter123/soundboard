@@ -43,6 +43,9 @@ class AppServiceProvider extends ServiceProvider
         // after the role was last synced.
         Gate::before(fn (User $user) => $user->hasRole(Role::SUPER_ADMIN) ? true : null);
 
+        // The whole audit log with audit.read; their teams' entries for team owners.
+        Gate::define('viewAuditLog', fn (User $user) => $user->can('audit.read') || $user->ownedTeamIds() !== []);
+
         RateLimiter::for('api', fn (Request $request) => Limit::perMinute(60)->by($request->user()?->id ?: $request->ip()));
 
         $this->app->afterResolving(ApplicationManager::class, function (ApplicationManager $manager) {

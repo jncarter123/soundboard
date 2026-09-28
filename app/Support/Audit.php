@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use App\Models\ReverbApp;
+use App\Models\Team;
 use Illuminate\Database\Eloquent\Model;
 use Spatie\Activitylog\Contracts\Activity;
 
@@ -80,5 +82,13 @@ class Audit
             ];
 
         $activity->properties = collect($activity->properties)->merge($context);
+
+        // The team whose owners may read this entry: an app's team at the
+        // time, or the team itself.
+        $activity->team_id = match (true) {
+            $activity->subject instanceof ReverbApp => $activity->subject->team_id,
+            $activity->subject instanceof Team => $activity->subject->id,
+            default => null,
+        };
     }
 }

@@ -14,7 +14,7 @@ class TeamPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->can('teams.read') || $this->ownsAny($user);
+        return $user->can('teams.read') || $user->ownedTeamIds() !== [];
     }
 
     public function view(User $user, Team $team): bool
@@ -25,10 +25,5 @@ class TeamPolicy
     public function manageMembers(User $user, Team $team): bool
     {
         return $user->can('teams.manage') || $user->teamRole($team->id) === TeamRole::Owner;
-    }
-
-    private function ownsAny(User $user): bool
-    {
-        return $user->teams->contains(fn (Team $team) => $user->teamRole($team->id) === TeamRole::Owner);
     }
 }

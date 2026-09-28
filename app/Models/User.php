@@ -60,6 +60,18 @@ class User extends Authenticatable
     }
 
     /**
+     * IDs of the teams this user owns.
+     *
+     * @return list<int>
+     */
+    public function ownedTeamIds(): array
+    {
+        return $this->teams
+            ->filter(fn (Team $team) => $this->teamRole($team->id) === TeamRole::Owner)
+            ->modelKeys();
+    }
+
+    /**
      * Every permission this user has anywhere: from their roles, plus what
      * their team roles give on their teams' apps. Controlling their account
      * means controlling all of it.
