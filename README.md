@@ -77,7 +77,7 @@ docker compose up -d
 docker compose exec app php artisan soundboard:add-user --role="Super Admin"   # your admin account
 ```
 
-The dashboard is on `127.0.0.1:8000` and Reverb on `127.0.0.1:8080`, both plain HTTP on loopback only, for a reverse proxy in front to terminate TLS. Set `APP_URL` in `docker.env` to the dashboard's public URL, scheme included (`https://soundboard.example.com`), or the browser blocks its assets as mixed content.
+The dashboard is on `127.0.0.1:8000` and Reverb on `127.0.0.1:8080`, both plain HTTP on loopback only, for a reverse proxy in front to terminate TLS. Set `APP_URL` in `docker.env` to the dashboard's public URL, scheme included (`https://soundboard.example.com`), or the browser blocks its assets as mixed content. Compose trusts the proxy's `X-Forwarded-*` headers (`TRUSTED_PROXIES=*`), which is safe only while those ports stay on loopback; if you publish them more widely, change `TRUSTED_PROXIES` in `compose.yaml` to your proxy's address (setting it in `docker.env` has no effect, as compose's value wins).
 
 - **Back up the volume.** On first start, the dashboard container generates an `APP_KEY` onto the `soundboard-data` volume and says so in its log. It encrypts every stored app secret, so without it clients can't connect. Set `APP_KEY` in `docker.env` instead if you'd rather hold it yourself.
 - **Data** lives in SQLite on the same volume. Switch to MySQL or MariaDB in `docker.env`.
@@ -314,6 +314,7 @@ Besides `name` and `allowed_origins`, create and update accept Reverb's per-app 
 
 | Variable | Default | Description |
 |---|---|---|
+| `TRUSTED_PROXIES` | _(none)_ | Reverse proxies whose `X-Forwarded-*` headers are believed, so the app sees the real client IP and scheme: a comma-separated list of IPs or CIDRs (`10.0.0.1, 172.16.0.0/12`), or `*` for any. Only use `*` when the app can be reached solely through the proxy, or clients can spoof their IP past the login and API rate limits. Docker's compose file sets `*`, since its ports are loopback-only. |
 | `REVERB_APPS_CACHE_TTL` | `10` | Seconds the running Reverb server keeps apps in memory. Dashboard and API changes, including regenerated credentials, take effect within this window. `0` queries on every lookup. |
 | `REVERB_METRICS_HOST` | `127.0.0.1` | Where the dashboard reaches Reverb's HTTP API for live metrics and health checks |
 | `REVERB_METRICS_PORT` | `8080` | |
