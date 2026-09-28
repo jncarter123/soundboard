@@ -37,6 +37,8 @@ class Index extends Component
             'team.member_added' => 'Added team member',
             'team.member_role_changed' => 'Changed team member role',
             'team.member_removed' => 'Removed team member',
+            'team.webhook_secret_viewed' => 'Viewed team webhook secret',
+            'team.webhook_secret_regenerated' => 'Regenerated team webhook secret',
         ],
         'API tokens' => ['token.created' => 'Created token', 'token.revoked' => 'Revoked token'],
         'Records' => ['created' => 'Created', 'updated' => 'Updated', 'deleted' => 'Deleted'],

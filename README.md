@@ -129,6 +129,16 @@ ALERTS_WEBHOOK_URL=https://example.com/hooks/soundboard
 ALERTS_WEBHOOK_SECRET=a-long-random-string          # required with a webhook: openssl rand -hex 32
 ```
 
+### Team alerts
+
+Team owners can send alerts about their team's apps to their own email addresses and webhook: on the **Teams** page, choose **Alerts** for the team, save the destinations, and use **Send test alert** to check them (five tests per team per ten minutes). Connection and daily message limit alerts for the team's apps go there; server-wide alerts (Reverb unreachable, stale metrics, clock skew) go only to the server's destinations.
+
+The server's destinations still get every alert, including teams'. Set `ALERTS_SERVER_GETS_TEAM_ALERTS=false` to send team alerts only to the team.
+
+A team webhook gets the same payload as the server's, signed the same way but with the team's own secret, which Soundboard generates when the webhook is saved. Owners can show or regenerate it on the same screen; both are recorded in the audit log.
+
+Soundboard makes requests to whatever URL a team enters, so team webhooks must use `https` and resolve only to public addresses. The address is checked when saved and again just before each request, the request goes only to the address that was checked, and redirects aren't followed. If your teams' receivers are on an internal network you trust, set `ALERTS_TEAM_WEBHOOKS_ALLOW_PRIVATE=true` to allow `http` and private addresses.
+
 ### Webhook format
 
 A `POST` with a JSON body:
@@ -150,12 +160,13 @@ A `POST` with a JSON body:
     "triggered_at": "2026-09-25T14:03:00+00:00",
     "resolved_at": null
   },
+  "team": { "id": 3, "name": "Payments" },
   "soundboard": { "name": "Soundboard", "url": "https://soundboard.example.com" },
   "sent_at": "2026-09-25T14:03:01+00:00"
 }
 ```
 
-`event` is `triggered`, `changed` (severity went up or down), `reminder`, `resolved`, or `test`. Use `alert.key` to group notifications about the same problem.
+`event` is `triggered`, `changed` (severity went up or down), `reminder`, `resolved`, or `test`. Use `alert.key` to group notifications about the same problem. `team` is the team of the app the alert is about, or `null` for server-wide alerts and apps with no team.
 
 Every request is signed. Verify it before trusting the body, and reject old timestamps to stop replays:
 

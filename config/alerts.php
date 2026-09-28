@@ -22,6 +22,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Team destinations
+    |--------------------------------------------------------------------------
+    |
+    | Team owners can send alerts about their team's apps to their own email
+    | and webhook. server_gets_team_alerts: also send those alerts to the
+    | destinations above. team_webhooks_allow_private: team webhooks must be
+    | https and resolve to public addresses, so a team can't make Soundboard
+    | send requests into your private network; set this to allow http and
+    | private addresses, for receivers on an internal network you trust.
+    |
+    */
+
+    'server_gets_team_alerts' => (bool) env('ALERTS_SERVER_GETS_TEAM_ALERTS', true),
+
+    'team_webhooks_allow_private' => (bool) env('ALERTS_TEAM_WEBHOOKS_ALLOW_PRIVATE', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | When to alert
     |--------------------------------------------------------------------------
     |

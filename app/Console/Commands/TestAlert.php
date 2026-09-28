@@ -2,12 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Alert;
-use App\Notifications\AlertNotification;
-use App\Notifications\Channels\WebhookChannel;
+use App\Alerts\AlertMonitor;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Notification;
-use Throwable;
 
 class TestAlert extends Command
 {
@@ -17,41 +13,26 @@ class TestAlert extends Command
 
     public function handle(): int
     {
-        $routes = array_filter([
-            'email' => config('alerts.mail_to') ? ['mail', config('alerts.mail_to')] : null,
-            'webhook' => config('alerts.webhook_url') ? [WebhookChannel::class, config('alerts.webhook_url')] : null,
-        ]);
+        $destinations = AlertMonitor::destinations(null);
 
-        if ($routes === []) {
+        if ($destinations === []) {
             $this->components->warn('No alert destinations configured. Set ALERTS_MAIL_TO and/or ALERTS_WEBHOOK_URL.');
 
             return self::FAILURE;
         }
 
-        $alert = new Alert([
-            'key' => 'test',
-            'type' => 'test',
-            'severity' => Alert::WARNING,
-            'message' => 'Test alert from Soundboard',
-            'details' => [],
-            'triggered_at' => now(),
-        ]);
-
         $failed = false;
 
-        foreach ($routes as $label => [$channel, $route]) {
-            $target = is_array($route) ? implode(', ', $route) : $route;
-
-            try {
-                Notification::route($channel, $route)->notifyNow(new AlertNotification($alert, 'test'));
-                $this->components->info("Sent test {$label} to {$target}.");
-            } catch (Throwable $e) {
+        foreach (AlertMonitor::sendTest($destinations) as $result) {
+            if ($result['error'] === null) {
+                $this->components->info("Sent test {$result['label']} to {$result['target']}.");
+            } else {
                 $failed = true;
-                $this->components->error("Test {$label} to {$target} failed: {$e->getMessage()}");
+                $this->components->error("Test {$result['label']} to {$result['target']} failed: {$result['error']}");
             }
         }
 
-        if (config('mail.default') === 'log' && isset($routes['email'])) {
+        if (config('mail.default') === 'log' && config('alerts.mail_to')) {
             $this->components->warn('MAIL_MAILER is "log": the email was written to the log, not sent.');
         }
 
