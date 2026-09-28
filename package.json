@@ -8,6 +8,7 @@
         "dev": "vite"
     },
     "devDependencies": {
+        "@simplewebauthn/browser": "^14.0.0",
         "@tailwindcss/vite": "^4.3.3",
         "concurrently": "^10.0.5",
         "laravel-vite-plugin": "^3.2",

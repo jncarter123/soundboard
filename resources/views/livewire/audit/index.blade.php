@@ -79,7 +79,7 @@
                                         </dd>
                                     </div>
                                 @endforeach
-                                @foreach (['added' => 'added', 'removed' => 'removed', 'user' => 'user', 'role' => 'role', 'from' => 'from', 'to' => 'to', 'email' => 'email', 'token' => 'token', 'expires_at' => 'expires'] as $key => $label)
+                                @foreach (['added' => 'added', 'removed' => 'removed', 'method' => 'method', 'passkey' => 'passkey', 'user' => 'user', 'role' => 'role', 'from' => 'from', 'to' => 'to', 'email' => 'email', 'token' => 'token', 'expires_at' => 'expires'] as $key => $label)
                                     @if (filled($properties[$key] ?? null))
                                         <div>
                                             <dt class="inline font-mono text-xs text-gray-500">{{ $label }}</dt>

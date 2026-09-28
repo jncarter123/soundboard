@@ -16,6 +16,7 @@ Reverb normally reads its applications from `config/reverb.php`, so adding an ap
 - **System status**: database, Redis, and Reverb health at a glance, plus a `/api/health` endpoint for load balancers.
 - **Role-based access control**: fine-grained permissions for apps, users, roles, teams, tokens, metrics, and status. Users can never grant access they don't hold themselves.
 - **Teams**: give a team its own apps, so its members see and manage only those.
+- **Passkeys**: sign in with a fingerprint, face, or device PIN, and require passkeys for Super Admins.
 - **API**: manage apps and rotate credentials from scripts and CI with personal access tokens.
 - **Alerts** by email and signed webhook when an app nears or hits its connection limit, Reverb goes down, or metrics stop recording.
 - **Audit log**: who signed in, viewed or regenerated credentials, and changed apps, users, roles, teams, or tokens, with the source and IP of each action.
@@ -129,6 +130,8 @@ ALERTS_WEBHOOK_URL=https://example.com/hooks/soundboard
 ALERTS_WEBHOOK_SECRET=a-long-random-string          # required with a webhook: openssl rand -hex 32
 ```
 
+Email goes out over SMTP (`MAIL_MAILER=smtp` and the other `MAIL_*` settings). Laravel's API mailers for SES, Postmark, and Resend aren't installed, to keep the image small, so use your provider's SMTP endpoint instead. For Amazon SES, that's `email-smtp.<region>.amazonaws.com` on port 587, with SMTP credentials from the SES console (not IAM access keys) and a verified `MAIL_FROM_ADDRESS`.
+
 ### Team alerts
 
 Team owners can send alerts about their team's apps to their own email addresses and webhook: on the **Teams** page, choose **Alerts** for the team, save the destinations, and use **Send test alert** to check them (five tests per team per ten minutes). Connection and daily message limit alerts for the team's apps go there; server-wide alerts (Reverb unreachable, stale metrics, clock skew) go only to the server's destinations.
@@ -221,13 +224,45 @@ Team owners can open the Audit Log too, but see only their teams' entries: chang
 
 App keys, secrets, and passwords are never recorded. Entries can't be edited or deleted from the dashboard; entries older than `ACTIVITYLOG_CLEAN_AFTER_DAYS` (365 by default) are removed daily by the scheduler.
 
+## Passkeys
+
+Anyone can add passkeys on their **Account** page and then sign in with **Sign in with a passkey**. Passkeys must verify the user (fingerprint, face, or device PIN), so a passkey counts as two factors on its own. Once you have a passkey, your password alone no longer signs you in: after it, Soundboard asks for the passkey too.
+
+Adding or removing a passkey, or changing your email, first asks you to confirm it's you: with a passkey, or if you have none yet, a code sent to your email. The confirmation lasts five minutes.
+
+Passkeys only work over `https` (or on `localhost`) and are tied to the domain in `APP_URL`. Changing that domain later makes existing passkeys unusable.
+
+### Requiring passkeys
+
+To require passkeys for a role, list it in `AUTH_PASSKEY_REQUIRED_ROLES` (comma-separated):
+
+```dotenv
+AUTH_PASSKEY_REQUIRED_ROLES="Super Admin"
+```
+
+It's off by default. Until you turn it on, Super Admins without a passkey see a reminder to add one.
+
+When it's on, a member of a listed role who has no passkey signs in with their password, then enters a code sent to their email, then registers a passkey. Until all three are done they aren't signed in and can reach nothing else, so a stolen password alone can't be used to add a passkey. Anyone already signed in without a passkey goes through the same steps on their next page load. They can't remove their last passkey.
+
+The email code needs Laravel's `MAIL_*` settings. Without working mail, or for the first Super Admin on a new install, print a one-time setup link on the server instead. It's valid for 15 minutes, skips the email code, and should be sent privately:
+
+```bash
+php artisan soundboard:passkey-link --email=you@example.com
+```
+
 ## Locked out?
 
-Soundboard sends no email, so there's no "forgot password" link. Reset a password from the server instead. It also signs that user out everywhere:
+Soundboard doesn't send password reset emails, so there's no "forgot password" link. Reset a password from the server instead. It also signs that user out everywhere:
 
 ```bash
 php artisan soundboard:reset-password --email=you@example.com
 docker compose exec app php artisan soundboard:reset-password --email=you@example.com   # with Docker
+```
+
+Lost your passkey? Remove it from the server, then sign in with your password. If your role requires a passkey, you'll register a new one:
+
+```bash
+php artisan soundboard:remove-passkeys --email=you@example.com
 ```
 
 Both user commands prompt for a password in a terminal, or generate one and print it when there's no terminal to ask in, such as `docker compose exec -T` or a script.
