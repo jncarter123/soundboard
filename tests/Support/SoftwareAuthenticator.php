@@ -34,8 +34,12 @@ class SoftwareAuthenticator
         $options = json_decode($optionsJson, true);
         $clientData = $this->clientData('webauthn.create', $options['challenge']);
 
+        // OpenSSL drops leading zero bytes; COSE needs each coordinate as
+        // exactly 32 bytes, or about one key in 80 is registered malformed.
         $details = openssl_pkey_get_details($this->key)['ec'];
-        $coseKey = $this->cbor([1 => 2, 3 => -7, -1 => 1, -2 => new CborBytes($details['x']), -3 => new CborBytes($details['y'])]);
+        $x = str_pad($details['x'], 32, "\0", STR_PAD_LEFT);
+        $y = str_pad($details['y'], 32, "\0", STR_PAD_LEFT);
+        $coseKey = $this->cbor([1 => 2, 3 => -7, -1 => 1, -2 => new CborBytes($x), -3 => new CborBytes($y)]);
 
         $authData = hash('sha256', $this->rpId, true)
             .chr(0x41 | ($userVerified ? 0x04 : 0))   // UP, AT, and UV when verified
