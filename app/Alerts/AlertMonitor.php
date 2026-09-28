@@ -3,6 +3,7 @@
 namespace App\Alerts;
 
 use App\Models\Alert;
+use App\Models\Team;
 use App\Notifications\AlertNotification;
 use App\Notifications\Channels\WebhookChannel;
 use Illuminate\Support\Facades\Log;
@@ -75,21 +76,20 @@ class AlertMonitor
     }
 
     /**
-     * Send one alert to every configured destination. A failing destination
+     * Send one alert to every destination that should hear about it: the
+     * server's, and for an app on a team, the team's. A failing destination
      * is logged and never stops the others or the check.
      */
     public function send(Alert $alert, string $change): void
     {
-        $routes = array_filter([
-            'mail' => config('alerts.mail_to') ?: null,
-            WebhookChannel::class => config('alerts.webhook_url') ?: null,
-        ]);
+        $team = $alert->app?->team;
 
-        foreach ($routes as $channel => $route) {
+        foreach (self::destinations($team, includeServer: $team === null || config('alerts.server_gets_team_alerts')) as $destination) {
             try {
-                Notification::route($channel, $route)->notifyNow(new AlertNotification($alert, $change));
+                Notification::route($destination['channel'], $destination['route'])
+                    ->notifyNow(new AlertNotification($alert, $change, $team));
             } catch (Throwable $e) {
-                Log::error("Alert notification via {$channel} failed", [
+                Log::error("Alert notification to {$destination['label']} failed", [
                     'alert' => $alert->key,
                     'exception' => $e::class,
                     'message' => $e->getMessage(),
@@ -100,6 +100,69 @@ class AlertMonitor
         if ($alert->exists) {
             $alert->forceFill(['last_notified_at' => now()])->save();
         }
+    }
+
+    /**
+     * Where alerts go: the server's destinations and/or a team's.
+     *
+     * @return list<array{label: string, channel: string, route: mixed, target: string}>
+     */
+    public static function destinations(?Team $team, bool $includeServer = true): array
+    {
+        $destinations = [];
+
+        if ($includeServer && config('alerts.mail_to')) {
+            $destinations[] = ['label' => 'email', 'channel' => 'mail', 'route' => config('alerts.mail_to'), 'target' => implode(', ', config('alerts.mail_to'))];
+        }
+
+        if ($includeServer && config('alerts.webhook_url')) {
+            $destinations[] = ['label' => 'webhook', 'channel' => WebhookChannel::class, 'route' => config('alerts.webhook_url'), 'target' => config('alerts.webhook_url')];
+        }
+
+        if ($team?->alert_mail_to) {
+            $destinations[] = ['label' => "{$team->name} email", 'channel' => 'mail', 'route' => $team->alert_mail_to, 'target' => implode(', ', $team->alert_mail_to)];
+        }
+
+        if ($team?->alert_webhook_url) {
+            $destinations[] = [
+                'label' => "{$team->name} webhook",
+                'channel' => WebhookChannel::class,
+                'route' => new WebhookTarget($team->alert_webhook_url, (string) $team->alert_webhook_secret, publicOnly: ! config('alerts.team_webhooks_allow_private')),
+                'target' => $team->alert_webhook_url,
+            ];
+        }
+
+        return $destinations;
+    }
+
+    /**
+     * Send a test alert to each destination.
+     *
+     * @param  list<array{label: string, channel: string, route: mixed, target: string}>  $destinations
+     * @return list<array{label: string, target: string, error: string|null}>
+     */
+    public static function sendTest(array $destinations, ?Team $team = null): array
+    {
+        $alert = new Alert([
+            'key' => 'test',
+            'type' => 'test',
+            'severity' => Alert::WARNING,
+            'message' => 'Test alert from Soundboard',
+            'details' => [],
+            'triggered_at' => now(),
+        ]);
+
+        return array_map(function (array $destination) use ($alert, $team) {
+            try {
+                Notification::route($destination['channel'], $destination['route'])
+                    ->notifyNow(new AlertNotification($alert, 'test', $team));
+                $error = null;
+            } catch (Throwable $e) {
+                $error = $e->getMessage();
+            }
+
+            return ['label' => $destination['label'], 'target' => $destination['target'], 'error' => $error];
+        }, $destinations);
     }
 
     protected function reminderDue(Alert $alert): bool

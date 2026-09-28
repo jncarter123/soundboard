@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Alerts\AlertMonitor;
 use App\Models\Alert;
+use App\Models\Team;
 use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -13,9 +14,13 @@ class AlertNotification extends Notification
     /** Bumped only for breaking changes to the webhook payload. */
     public const PAYLOAD_VERSION = 1;
 
+    /**
+     * @param  Team|null  $team  The team whose app the alert is about.
+     */
     public function __construct(
         public Alert $alert,
         public string $change,
+        public ?Team $team = null,
     ) {}
 
     /**
@@ -48,8 +53,12 @@ class AlertNotification extends Notification
             $mail->line('It started '.$alert->triggered_at->toDayDateTimeString().' UTC and lasted '.$alert->triggered_at->diffForHumans($alert->resolved_at, true).'.');
         }
 
+        if ($this->team) {
+            $mail->line("Team: {$this->team->name}");
+        }
+
         if ($this->change === 'test') {
-            $mail->line('This is a test sent by `php artisan soundboard:test-alert`. Alert email works.');
+            $mail->line('This is a test alert from Soundboard. Alert email works.');
         }
 
         return $mail->action('Open Soundboard', url('/admin/status'));
@@ -78,6 +87,7 @@ class AlertNotification extends Notification
                 'triggered_at' => $alert->triggered_at?->toIso8601String(),
                 'resolved_at' => $alert->resolved_at?->toIso8601String(),
             ],
+            'team' => $this->team ? ['id' => $this->team->id, 'name' => $this->team->name] : null,
             'soundboard' => [
                 'name' => config('app.name'),
                 'url' => config('app.url'),

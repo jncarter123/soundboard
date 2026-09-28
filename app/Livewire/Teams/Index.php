@@ -2,11 +2,14 @@
 
 namespace App\Livewire\Teams;
 
+use App\Alerts\AlertMonitor;
 use App\Enums\TeamRole;
 use App\Models\Team;
 use App\Models\User;
 use App\Support\Audit;
+use App\Support\PublicUrlGuard;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -32,6 +35,28 @@ class Index extends Component
     public string $newMemberEmail = '';
 
     public string $newMemberRole = 'viewer';
+
+    /** The team whose alert destinations are shown. */
+    #[Locked]
+    public ?int $alertsTeamId = null;
+
+    public string $alertMailTo = '';
+
+    public string $alertWebhookUrl = '';
+
+    /**
+     * Whether to show the webhook secret. Only this flag lives in component
+     * state; the secret is loaded in render() so it never ends up in the
+     * serialized Livewire snapshot.
+     */
+    #[Locked]
+    public bool $revealSecret = false;
+
+    /** @var list<array{label: string, target: string, error: string|null}> */
+    #[Locked]
+    public array $testResults = [];
+
+    public bool $alertsSaved = false;
 
     public function newTeam(): void
     {
@@ -194,6 +219,127 @@ class Index extends Component
         Audit::log('team.member_removed', 'Removed team member', $team, ['user' => $member->email, 'role' => $role->value]);
     }
 
+    public function showAlerts(int $teamId): void
+    {
+        $team = Team::findOrFail($teamId);
+        $this->authorize('manageAlerts', $team);
+        $this->closeAlerts();
+        $this->alertsTeamId = $team->id;
+        $this->alertMailTo = implode(', ', $team->alert_mail_to ?? []);
+        $this->alertWebhookUrl = (string) $team->alert_webhook_url;
+    }
+
+    public function closeAlerts(): void
+    {
+        $this->reset(['alertsTeamId', 'alertMailTo', 'alertWebhookUrl', 'revealSecret', 'testResults', 'alertsSaved']);
+        $this->resetValidation();
+    }
+
+    public function saveAlerts(): void
+    {
+        $team = Team::findOrFail($this->alertsTeamId);
+        $this->authorize('manageAlerts', $team);
+        $this->reset(['testResults', 'alertsSaved']);
+        $this->resetValidation();
+
+        $emails = $this->parseEmails();
+        $url = trim($this->alertWebhookUrl) === '' ? null : trim($this->alertWebhookUrl);
+
+        $validator = validator(
+            ['emails' => $emails, 'url' => $url],
+            ['emails' => ['array', 'max:10'], 'emails.*' => ['email'], 'url' => ['nullable', 'url', 'max:2048']],
+            ['emails.max' => 'Up to 10 email addresses.', 'emails.*.email' => ':input is not an email address.', 'url.url' => 'Enter a full URL, starting with https://.'],
+        )->after(function ($validator) use ($url) {
+            if ($url !== null && ! config('alerts.team_webhooks_allow_private')
+                && $problem = app(PublicUrlGuard::class)->problem($url)) {
+                $validator->errors()->add('url', $problem);
+            }
+        });
+
+        if ($validator->fails()) {
+            foreach ($validator->errors()->messages() as $key => $messages) {
+                $this->addError(str_starts_with($key, 'emails') ? 'alertMailTo' : 'alertWebhookUrl', $messages[0]);
+            }
+
+            return;
+        }
+
+        $team->update([
+            'alert_mail_to' => $emails === [] ? null : $emails,
+            'alert_webhook_url' => $url,
+            // A webhook gets its own secret when first set, and loses it when removed.
+            'alert_webhook_secret' => $url === null ? null : ($team->alert_webhook_secret ?? Team::generateWebhookSecret()),
+        ]);
+
+        $this->alertMailTo = implode(', ', $emails);
+        $this->alertWebhookUrl = (string) $url;
+        $this->alertsSaved = true;
+    }
+
+    public function revealWebhookSecret(): void
+    {
+        $team = Team::findOrFail($this->alertsTeamId);
+        $this->authorize('manageAlerts', $team);
+
+        if ($team->alert_webhook_secret !== null) {
+            Audit::log('team.webhook_secret_viewed', 'Viewed team webhook secret', $team);
+            $this->revealSecret = true;
+        }
+    }
+
+    public function regenerateWebhookSecret(): void
+    {
+        $team = Team::findOrFail($this->alertsTeamId);
+        $this->authorize('manageAlerts', $team);
+
+        if ($team->alert_webhook_url === null) {
+            return;
+        }
+
+        $team->update(['alert_webhook_secret' => Team::generateWebhookSecret()]);
+        Audit::log('team.webhook_secret_regenerated', 'Regenerated team webhook secret', $team);
+        $this->revealSecret = true;
+    }
+
+    /**
+     * Send a test alert to the team's saved destinations. Rate limited, so
+     * a team can't use Soundboard to flood an inbox or endpoint.
+     */
+    public function sendTestAlert(): void
+    {
+        $team = Team::findOrFail($this->alertsTeamId);
+        $this->authorize('manageAlerts', $team);
+        $this->reset(['testResults', 'alertsSaved']);
+        $this->resetValidation();
+
+        $destinations = AlertMonitor::destinations($team, includeServer: false);
+
+        if ($destinations === []) {
+            $this->addError('alertTest', 'Save an email address or webhook first.');
+
+            return;
+        }
+
+        $key = "team-test-alert:{$team->id}";
+
+        if (RateLimiter::tooManyAttempts($key, 5)) {
+            $this->addError('alertTest', 'Too many test alerts. Try again in '.ceil(RateLimiter::availableIn($key) / 60).' minutes.');
+
+            return;
+        }
+
+        RateLimiter::hit($key, 600);
+        $this->testResults = AlertMonitor::sendTest($destinations, $team);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function parseEmails(): array
+    {
+        return array_values(array_unique(array_filter(preg_split('/[\s,;]+/', strtolower($this->alertMailTo)))));
+    }
+
     public function cancelForm(): void
     {
         $this->showForm = false;
@@ -258,9 +404,18 @@ class Index extends Component
             $membersTeam = null;
         }
 
+        $alertsTeam = $this->alertsTeamId ? Team::find($this->alertsTeamId) : null;
+
+        if ($alertsTeam && ! $user->can('manageAlerts', $alertsTeam)) {
+            $alertsTeam = null;
+        }
+
         return view('livewire.teams.index', [
             'teams' => $teams,
             'membersTeam' => $membersTeam,
+            'alertsTeam' => $alertsTeam,
+            'webhookSecret' => $alertsTeam && $this->revealSecret ? $alertsTeam->alert_webhook_secret : null,
+            'serverGetsTeamAlerts' => (bool) config('alerts.server_gets_team_alerts'),
             'roles' => TeamRole::cases(),
         ])->layout('components.layouts.app');
     }

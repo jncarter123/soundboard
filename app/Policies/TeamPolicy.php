@@ -8,7 +8,8 @@ use App\Models\User;
 
 /**
  * Creating, renaming, and deleting teams takes teams.manage. A team's
- * owners can also see and manage its members, without that permission.
+ * owners can also see and manage its members and alert destinations,
+ * without that permission.
  */
 class TeamPolicy
 {
@@ -25,5 +26,13 @@ class TeamPolicy
     public function manageMembers(User $user, Team $team): bool
     {
         return $user->can('teams.manage') || $user->teamRole($team->id) === TeamRole::Owner;
+    }
+
+    /**
+     * Where alerts about the team's apps go, and the webhook's secret.
+     */
+    public function manageAlerts(User $user, Team $team): bool
+    {
+        return $this->manageMembers($user, $team);
     }
 }

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Alert extends Model
 {
@@ -24,6 +25,15 @@ class Alert extends Model
             'resolved_at' => 'datetime',
             'last_notified_at' => 'datetime',
         ];
+    }
+
+    /**
+     * The app the alert is about, if any. Its team, looked up at send time,
+     * decides which team's destinations hear about it.
+     */
+    public function app(): BelongsTo
+    {
+        return $this->belongsTo(ReverbApp::class, 'app_id', 'app_id');
     }
 
     public function scopeActive(Builder $query): void

@@ -43,6 +43,14 @@
                                 >
                                     Members
                                 </button>
+                                @can('manageAlerts', $team)
+                                <button
+                                    wire:click="showAlerts({{ $team->id }})"
+                                    class="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                                >
+                                    Alerts
+                                </button>
+                                @endcan
                                 @can('teams.manage')
                                 <button
                                     wire:click="editTeam({{ $team->id }})"
@@ -213,6 +221,116 @@
                             @endforeach
                         </div>
                     @endif
+                </div>
+            </div>
+        </div>
+    @endif
+    {{-- Alerts Modal --}}
+    @if ($alertsTeam)
+        <div class="fixed inset-0 z-50 flex items-center justify-center">
+            <div wire:click="closeAlerts" class="absolute inset-0 bg-black/40"></div>
+
+            <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6 max-h-[90vh] overflow-y-auto">
+                <div class="flex items-center justify-between mb-2">
+                    <h2 class="text-lg font-semibold text-gray-900">{{ $alertsTeam->name }} alerts</h2>
+                    <button wire:click="closeAlerts" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <p class="mb-5 text-sm text-gray-500">
+                    Where alerts about this team's apps go: nearing or hitting a connection or daily message limit.
+                    @if ($serverGetsTeamAlerts)
+                        The server's own alert destinations get them too.
+                    @endif
+                </p>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                        <textarea
+                            wire:model="alertMailTo"
+                            rows="2"
+                            placeholder="oncall@example.com, team@example.com"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none @error('alertMailTo') border-red-400 @enderror"
+                        ></textarea>
+                        <p class="mt-1 text-xs text-gray-500">Comma-separated, up to 10.</p>
+                        @error('alertMailTo') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Webhook URL</label>
+                        <input
+                            wire:model="alertWebhookUrl"
+                            type="url"
+                            placeholder="https://example.com/hooks/soundboard"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none @error('alertWebhookUrl') border-red-400 @enderror"
+                        >
+                        <p class="mt-1 text-xs text-gray-500">Receives a signed JSON POST, in the same format as the server's alert webhook.</p>
+                        @error('alertWebhookUrl') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                    </div>
+
+                    @if ($alertsTeam->alert_webhook_url)
+                        <div class="rounded-lg border border-gray-200 p-3">
+                            <div class="flex items-center justify-between gap-2">
+                                <p class="text-sm font-medium text-gray-700">Signing secret</p>
+                                <div class="flex gap-2">
+                                    @unless ($webhookSecret)
+                                        <button wire:click="revealWebhookSecret" class="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                                            Show
+                                        </button>
+                                    @endunless
+                                    <button
+                                        wire:click="regenerateWebhookSecret"
+                                        wire:confirm="Regenerate the secret? The receiver will reject alerts until it's updated."
+                                        class="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100"
+                                    >
+                                        Regenerate
+                                    </button>
+                                </div>
+                            </div>
+                            @if ($webhookSecret)
+                                <div x-data="{ copied: false }" class="mt-2 flex items-center gap-2">
+                                    <code class="flex-1 block bg-gray-100 text-gray-800 text-xs rounded-lg px-3 py-2 font-mono break-all">{{ $webhookSecret }}</code>
+                                    <button
+                                        x-on:click="navigator.clipboard.writeText({{ Js::from($webhookSecret) }}); copied = true; setTimeout(() => copied = false, 2000)"
+                                        class="shrink-0 px-3 py-2 text-xs font-medium rounded-lg border border-gray-300 hover:bg-gray-50"
+                                        x-text="copied ? 'Copied!' : 'Copy'"
+                                    ></button>
+                                </div>
+                            @endif
+                            <p class="mt-2 text-xs text-gray-500">Verify the <code>X-Soundboard-Signature</code> header with this secret before trusting a request.</p>
+                        </div>
+                    @endif
+
+                    @error('alertTest') <p class="text-sm text-red-600">{{ $message }}</p> @enderror
+                    @if ($alertsSaved)
+                        <p class="text-sm text-green-700">Saved.</p>
+                    @endif
+                    @foreach ($testResults as $result)
+                        <p class="text-sm {{ $result['error'] === null ? 'text-green-700' : 'text-red-600' }}">
+                            @if ($result['error'] === null)
+                                Sent a test to {{ $result['target'] }}.
+                            @else
+                                Test to {{ $result['target'] }} failed: {{ $result['error'] }}
+                            @endif
+                        </p>
+                    @endforeach
+                </div>
+
+                <div class="flex justify-between gap-3 mt-6">
+                    <button wire:click="sendTestAlert" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                        Send test alert
+                    </button>
+                    <div class="flex gap-3">
+                        <button wire:click="closeAlerts" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                            Close
+                        </button>
+                        <button wire:click="saveAlerts" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+                            Save
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
