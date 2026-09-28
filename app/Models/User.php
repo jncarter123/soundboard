@@ -16,15 +16,17 @@ use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
+use Spatie\LaravelPasskeys\Models\Concerns\HasPasskeys;
+use Spatie\LaravelPasskeys\Models\Concerns\InteractsWithPasskeys;
 use Spatie\Permission\Contracts\Permission;
 use Spatie\Permission\Traits\HasRoles;
 
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable
+class User extends Authenticatable implements HasPasskeys
 {
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory, HasRoles, LogsActivity, Notifiable;
+    use HasApiTokens, HasFactory, HasRoles, InteractsWithPasskeys, LogsActivity, Notifiable;
 
     /**
      * Get the attributes that should be cast.
@@ -37,6 +39,22 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Whether this user must sign in with a passkey: they're in one of
+     * AUTH_PASSKEY_REQUIRED_ROLES.
+     */
+    public function requiresPasskey(): bool
+    {
+        $roles = config('passkeys.required_roles', []);
+
+        return $roles !== [] && $this->hasAnyRole($roles);
+    }
+
+    public function hasPasskey(): bool
+    {
+        return $this->passkeys()->exists();
     }
 
     public function teams(): BelongsToMany

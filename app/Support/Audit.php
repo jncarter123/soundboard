@@ -20,6 +20,9 @@ class Audit
     /** Set while an artisan command runs, so its entries say "cli". */
     public static bool $runningCommand = false;
 
+    /** How the next sign-in was completed ("password" or "passkey"), for its entry. */
+    public static ?string $loginMethod = null;
+
     /**
      * Run a command's work with its audit entries marked as command line.
      * `php artisan` also sets this through Laravel's command events; this

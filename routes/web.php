@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\PasskeySetupController;
+use App\Http\Middleware\RequirePasskey;
 use App\Livewire\Account\Show as Account;
 use App\Livewire\Admin\Home;
 use App\Livewire\Admin\Metrics;
@@ -18,6 +20,8 @@ Route::get('/', fn () => redirect()->route('admin.home'));
 
 Route::get('/login', Login::class)->name('login')->middleware('guest');
 
+Route::get('/passkeys/setup/{nonce}', PasskeySetupController::class)->name('passkeys.setup')->middleware('signed:relative');
+
 Route::post('/logout', function () {
     Auth::logout();
     request()->session()->invalidate();
@@ -26,7 +30,7 @@ Route::post('/logout', function () {
     return redirect()->route('login');
 })->name('logout')->middleware('auth');
 
-Route::middleware('auth')->prefix('admin')->group(function () {
+Route::middleware(['auth', RequirePasskey::class])->prefix('admin')->group(function () {
     Route::get('/account', Account::class)->name('account');
     Route::get('/', Home::class)->name('admin.home');
     Route::get('/users', UsersIndex::class)->name('admin.users')->middleware('can:users.read');

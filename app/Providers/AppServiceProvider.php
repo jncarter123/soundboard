@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Http\Middleware\RequirePasskey;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\Audit;
@@ -19,6 +20,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Reverb\ApplicationManager;
+use Livewire\Livewire;
 use Spatie\Activitylog\Models\Activity;
 
 class AppServiceProvider extends ServiceProvider
@@ -38,6 +40,9 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureProxies();
         $this->configureAuditing();
+
+        // Livewire's update requests re-run this too, not just page loads.
+        Livewire::addPersistentMiddleware([RequirePasskey::class]);
 
         // Super Admin controls the whole server, including permissions added
         // after the role was last synced.
@@ -70,6 +75,7 @@ class AppServiceProvider extends ServiceProvider
             'auth.login',
             $event->remember ? 'Signed in (remembered)' : 'Signed in',
             $event->user,
+            array_filter(['method' => Audit::$loginMethod]),
         ));
 
         Event::listen(Logout::class, fn (Logout $event) => $event->user && Audit::log('auth.logout', 'Signed out', $event->user));

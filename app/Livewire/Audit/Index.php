@@ -25,6 +25,14 @@ class Index extends Component
     /** Event filters, grouped as they appear in the dropdown. */
     public const EVENTS = [
         'Sign-in' => ['auth.login' => 'Signed in', 'auth.failed' => 'Failed sign-in', 'auth.logout' => 'Signed out'],
+        'Passkeys' => [
+            'passkey.added' => 'Added passkey',
+            'passkey.removed' => 'Removed passkey',
+            'auth.email_code_sent' => 'Sent email code',
+            'auth.email_code_failed' => 'Too many wrong email codes',
+            'auth.setup_link_created' => 'Created setup link (CLI)',
+            'auth.setup_link_used' => 'Opened setup link',
+        ],
         'Apps' => ['credentials.viewed' => 'Viewed credentials', 'credentials.regenerated' => 'Regenerated credentials'],
         'Users & roles' => [
             'user.roles_changed' => 'Changed user roles',

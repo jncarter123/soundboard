@@ -100,6 +100,14 @@
     </div>
 </nav>
 
+@if (auth()->user()->hasRole(\App\Models\Role::SUPER_ADMIN) && ! auth()->user()->hasPasskey() && ! request()->routeIs('account'))
+    <div class="bg-amber-50 border-b border-amber-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 text-sm text-amber-900">
+            Your account controls the whole server. <a href="{{ route('account') }}#passkeys" class="font-medium underline">Add a passkey</a> so a stolen password isn't enough to sign in.
+        </div>
+    </div>
+@endif
+
 <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     {{ $slot }}
 </main>
