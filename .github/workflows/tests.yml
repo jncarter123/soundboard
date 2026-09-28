@@ -144,6 +144,11 @@ jobs:
         with:
           persist-credentials: false
 
+      # Created first, so the log and clean-up steps below still work when
+      # an earlier step fails, instead of burying its error under their own.
+      - name: Create docker.env
+        run: cp docker.env.example docker.env
+
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Build image
@@ -158,9 +163,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Start the stack
-        run: |
-          cp docker.env.example docker.env
-          docker compose up -d --no-build --wait --wait-timeout 180
+        run: docker compose up -d --no-build --wait --wait-timeout 180
 
       - name: Check health end to end
         run: |
